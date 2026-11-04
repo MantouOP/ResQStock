@@ -17,6 +17,14 @@ Then open http://localhost:5180 for the staff app and http://localhost:5180/wish
 The preview runs the real server code against fake spreadsheets in your browser. Add `?reset=1` to the address to start again with fresh mock data.
 Node.js 18 or newer is the only requirement, and there is nothing to install.
 
+## Live demo (Vercel)
+
+A demo with sample data is deployed on Vercel from `main`, and every push redeploys it. It is the same preview as above, built into static files by `npm run build:demo` (see `vercel.json`).
+
+- Each visitor gets their own sample data, saved only in their browser. Nothing goes to Google.
+- Every page shows a "Demo with sample data" note, so the donor page is not mistaken for a real appeal from KSK. The demo also asks search engines not to index it.
+- It is for showing the app. The real system runs on Google Apps Script, as [docs/SETUP.md](docs/SETUP.md) describes.
+
 ## Run the tests
 
 ```bash

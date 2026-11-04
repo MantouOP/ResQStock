@@ -14,11 +14,10 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { ROOT, renderPage, framePage } = require('./pages');
 
-const ROOT = path.resolve(__dirname, '..');
 const PORT = Number(process.argv[2] || process.env.PORT || 5180);
 const BASE = 'http://localhost:' + PORT + '/';
-const FIRST = ['Config.js', 'Logic.js'];
 const TYPES = {
   '.js': 'text/javascript; charset=utf-8',
   '.html': 'text/html; charset=utf-8',
@@ -26,37 +25,14 @@ const TYPES = {
   '.json': 'application/json; charset=utf-8'
 };
 
-/** Server files of one Apps Script project, Config and Logic first. */
-function appFiles(app) {
-  const all = fs.readdirSync(path.join(ROOT, app)).filter((f) => f.endsWith('.js'));
-  return FIRST.filter((f) => all.includes(f)).concat(all.filter((f) => !FIRST.includes(f)).sort());
-}
-
-/** Does what HtmlService does with <?!= include('Name'); ?>, then adds the preview client. */
-function renderPage(app) {
-  const dir = path.join(ROOT, app);
-  let html = fs.readFileSync(path.join(dir, 'Index.html'), 'utf8');
-  html = html.replace(/<\?!=\s*include\(\s*'([\w-]+)'\s*\);?\s*\?>/g, (m, name) => fs.readFileSync(path.join(dir, name + '.html'), 'utf8'));
-  html = html.replace(/<\?[\s\S]*?\?>/g, '');
-  const inject = '<script>window.__RQ_PREVIEW__ = ' + JSON.stringify({ app }) + ';</script><script src="/dev/preview-client.js"></script>';
-  return html.replace(/<head>/i, '<head>' + inject);
-}
-
-function framePage(app) {
+function frameGlobals(app) {
   const globals = {
     __RQ_APP__: app,
     __RQ_USER__: app === 'staff' ? 'volunteer@example.org' : '',
     __RQ_URL__: app === 'staff' ? BASE : BASE + 'wishlist',
     __RQ_BASE__: BASE
   };
-  const vars = Object.keys(globals).map((k) => 'var ' + k + ' = ' + JSON.stringify(globals[k]) + ';').join(' ');
-  const scripts = ['/dev/gas-shim.js']
-    .concat(appFiles(app).map((f) => '/src/' + app + '/' + f))
-    .concat(app === 'staff' ? ['/dev/seed.js'] : [])
-    .concat(['/dev/frame-boot.js'])
-    .map((src) => '<script src="' + src + '"></script>')
-    .join('\n');
-  return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Preview server: ' + app + '</title></head><body><script>' + vars + '</script>\n' + scripts + '\n</body></html>';
+  return Object.keys(globals).map((k) => 'var ' + k + ' = ' + JSON.stringify(globals[k]) + ';').join(' ');
 }
 
 const server = http.createServer((req, res) => {
@@ -70,9 +46,12 @@ const server = http.createServer((req, res) => {
     return send(200, TYPES[path.extname(file)] || 'application/octet-stream', fs.readFileSync(file));
   };
   try {
-    if (url.pathname === '/' || url.pathname === '/index.html') return send(200, TYPES['.html'], renderPage('staff'));
-    if (url.pathname === '/wishlist') return send(200, TYPES['.html'], renderPage('wishlist'));
-    if (url.pathname === '/dev/frame') return send(200, TYPES['.html'], framePage(url.searchParams.get('app') === 'wishlist' ? 'wishlist' : 'staff'));
+    if (url.pathname === '/' || url.pathname === '/index.html') return send(200, TYPES['.html'], renderPage('staff', { app: 'staff' }));
+    if (url.pathname === '/wishlist') return send(200, TYPES['.html'], renderPage('wishlist', { app: 'wishlist' }));
+    if (url.pathname === '/dev/frame') {
+      const app = url.searchParams.get('app') === 'wishlist' ? 'wishlist' : 'staff';
+      return send(200, TYPES['.html'], framePage(app, frameGlobals(app)));
+    }
     let m = /^\/dev\/([\w-]+\.js)$/.exec(url.pathname);
     if (m) return sendFile(path.join(ROOT, 'dev', m[1]));
     m = /^\/src\/(staff|wishlist)\/([\w-]+\.js)$/.exec(url.pathname);

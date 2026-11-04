@@ -8,6 +8,7 @@
     "test": "node --test \"test/*.test.js\"",
     "preview": "node dev/server.js",
     "bundle": "node dev/bundle.js",
+    "build:demo": "node dev/build-demo.js",
     "push:staff": "cd staff && clasp push",
     "push:wishlist": "cd wishlist && clasp push"
   },

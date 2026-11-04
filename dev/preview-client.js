@@ -18,8 +18,25 @@
     history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
   }
 
+  // The public demo says what it is on every page, so nobody mistakes the
+  // sample donor list for a real appeal from KSK.
+  if (cfg.demo) {
+    var addStrip = function () {
+      var strip = document.createElement('div');
+      strip.setAttribute('role', 'note');
+      strip.style.cssText = 'background:#fff6e5;color:#5c3d00;border-bottom:1px solid #f1d9a6;' +
+        'font:13px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding:7px 16px;text-align:center';
+      strip.innerHTML = cfg.app === 'wishlist'
+        ? '<strong>Demo with sample data.</strong> This is not a real donation appeal.'
+        : '<strong>Demo with sample data.</strong> Changes stay in this browser only. ' +
+          '<a href="?reset=1" style="color:#5c3d00;font-weight:600">Start over</a>';
+      document.body.insertBefore(strip, document.body.firstChild);
+    };
+    if (document.body) addStrip(); else document.addEventListener('DOMContentLoaded', addStrip);
+  }
+
   var frame = document.createElement('iframe');
-  frame.src = '/dev/frame?app=' + encodeURIComponent(cfg.app);
+  frame.src = cfg.frame || '/dev/frame?app=' + encodeURIComponent(cfg.app);
   frame.title = 'Preview server';
   frame.tabIndex = -1;
   frame.setAttribute('aria-hidden', 'true');
