@@ -1,0 +1,17 @@
+{
+  "name": "resqstock",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ResQStock: expiry alerts and a live donor wishlist for Kechara Soup Kitchen, built on Google Sheets and Apps Script (WIX2001 SULAM project).",
+  "license": "UNLICENSED",
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "preview": "node dev/server.js",
+    "bundle": "node dev/bundle.js",
+    "push:staff": "cd staff && clasp push",
+    "push:wishlist": "cd wishlist && clasp push"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

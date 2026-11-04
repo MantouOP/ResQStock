@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ResQStock</title>
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <div id="app" class="app">
+    <div class="boot" role="status">
+      <div class="spinner" aria-hidden="true"></div>
+      <p>Loading ResQStock…</p>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <?!= include('App'); ?>
+</body>
+</html>

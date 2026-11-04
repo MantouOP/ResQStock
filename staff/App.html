@@ -1,0 +1,1164 @@
+<script>
+(function () {
+  'use strict';
+
+  /* ================================================================== */
+  /* State                                                               */
+  /* ================================================================== */
+
+  var app = document.getElementById('app');
+  var toastEl = document.getElementById('toast');
+  var BOOT_HTML = app.innerHTML;
+  var PIN_KEY = 'resqstock.pin';
+  var QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
+  var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var STATUS_LABEL = { expired: 'Expired', soon: 'Expiring soon', safe: 'Safe', nodate: 'No date', out: 'Out of stock' };
+  var FILTER_LABEL = { soon: 'Expiring soon', expired: 'Expired', alerts: 'Expiring soon or expired', out: 'Out of stock' };
+  var UNITS = ['tins', 'bags', 'packs', 'bottles', 'cartons', 'jars', 'bars', 'tubes', 'loaves', 'boxes', 'kg', 'pieces'];
+
+  var S = { boot: null, pin: '', dashAt: 0, inv: null, invAt: 0, itemCache: null, q: '', cat: '', wishQ: '', wishFilter: 'all' };
+  var renderToken = 0;
+
+  /* ================================================================== */
+  /* Icons (24 x 24, stroked)                                            */
+  /* ================================================================== */
+
+  var ICONS = {
+    home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/>',
+    box: '<path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5 12 12l9-4.5M12 12v9"/>',
+    heart: '<path d="M12 20s-7-4.4-9-8.6C1.6 8.3 3.6 5 6.8 5c2 0 3.4 1.1 4.2 2.4h2C13.8 6.1 15.2 5 17.2 5c3.2 0 5.2 3.3 3.8 6.4C19 15.6 12 20 12 20z"/>',
+    more: '<circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>',
+    back: '<path d="M15 5l-7 7 7 7"/>',
+    chevron: '<path d="M9 5l7 7-7 7"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    minus: '<path d="M5 12h14"/>',
+    in: '<path d="M12 3v11M7.5 9.5 12 14l4.5-4.5"/><path d="M4 15v4h16v-4"/>',
+    out: '<path d="M12 14V3M7.5 7.5 12 3l4.5 4.5"/><path d="M4 15v4h16v-4"/>',
+    scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/><path d="M7 12h10"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
+    sliders: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
+    qr: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18v2M18 14h2"/>',
+    alert: '<path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.5M12 17.2v.3"/>',
+    info: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8v.3"/>',
+    external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+    print: '<path d="M7 8V4h10v4"/><rect x="4" y="8" width="16" height="8" rx="1.5"/><path d="M7 14h10v6H7z"/>',
+    leaf: '<path d="M20 3C9 3 4 9 4 15c0 2 .6 3.8 1.6 5.2l1.5-1.4C9 15 12 12 16 10c-3 2.6-5.6 5.6-7.4 9.4C9.7 20.5 11.2 21 13 21c6 0 8-7 7-18z"/>',
+    can: '<ellipse cx="12" cy="6" rx="6" ry="2.2"/><path d="M6 6v12c0 1.2 2.7 2.2 6 2.2s6-1 6-2.2V6"/><path d="M6 10.5c0 1.2 2.7 2.2 6 2.2s6-1 6-2.2"/>',
+    sack: '<path d="M8 4h8l-1.5 3c3 1.5 4.5 4.6 4.5 8 0 3-2.7 5-7 5s-7-2-7-5c0-3.4 1.5-6.5 4.5-8z"/><path d="M9.5 7h5"/>',
+    milk: '<path d="M8 3h8v3l2 3v12H6V9l2-3z"/><path d="M6 9h12"/>',
+    bread: '<path d="M5 11a3.5 3.5 0 0 1 2-6.4h10A3.5 3.5 0 0 1 19 11v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/>',
+    bottle: '<path d="M10 2.5h4V6l2 3v11.5a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V9l2-3z"/><path d="M8 13h8"/>',
+    jar: '<rect x="7" y="3" width="10" height="3.5" rx="1"/><path d="M6.5 6.5h11v12.5a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z"/><path d="M6.5 11h11"/>',
+    drop: '<path d="M12 3.5s6 6.3 6 10.5a6 6 0 0 1-12 0c0-4.2 6-10.5 6-10.5z"/>'
+  };
+  var FILLED = { more: true, leaf: true };
+
+  function icon(name) {
+    return '<span class="icon' + (FILLED[name] ? ' fill' : '') + '" aria-hidden="true"><svg viewBox="0 0 24 24">' + (ICONS[name] || '') + '</svg></span>';
+  }
+
+  function logo() { return '<span class="logo">' + icon('leaf') + '</span>'; }
+
+  function catIcon(category) {
+    var c = normalize(category);
+    if (/can/.test(c)) return 'can';
+    if (/dairy|milk/.test(c)) return 'milk';
+    if (/bak|bread/.test(c)) return 'bread';
+    if (/bever|drink|water|juice/.test(c)) return 'bottle';
+    if (/spread|jar|sauce/.test(c)) return 'jar';
+    if (/toilet|hygien|soap|clean/.test(c)) return 'drop';
+    if (/dry|grain|rice|staple/.test(c)) return 'sack';
+    return 'box';
+  }
+
+  function catClass(category) {
+    var s = normalize(category), h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 997;
+    return 'c' + (h % 6);
+  }
+
+  function thumb(category) { return '<span class="thumb ' + catClass(category) + '">' + icon(catIcon(category)) + '</span>'; }
+
+  /* ================================================================== */
+  /* Small helpers                                                       */
+  /* ================================================================== */
+
+  function esc(s) {
+    return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function normalize(s) { return String(s === null || s === undefined ? '' : s).toLowerCase().replace(/\s+/g, ' ').trim(); }
+
+  function fmtNum(n) { return String(Math.round(Number(n) * 100) / 100); }
+
+  function qtyText(n, unit) { return fmtNum(n) + (unit ? ' ' + unit : ''); }
+
+  function fmtDay(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+    return m ? Number(m[3]) + ' ' + MONTHS[Number(m[2]) - 1] + ' ' + m[1] : '';
+  }
+
+  function fmtStamp(stamp) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(stamp || '');
+    return m ? fmtDay(stamp) + ', ' + m[4] + ':' + m[5] : '';
+  }
+
+  function dayNum(iso) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || '');
+    return m ? Math.round(Date.UTC(+m[1], +m[2] - 1, +m[3]) / 864e5) : null;
+  }
+
+  function daysText(d) {
+    if (d === null || d === undefined) return 'No expiry date';
+    if (d < -1) return 'Expired ' + (-d) + ' days ago';
+    if (d === -1) return 'Expired yesterday';
+    if (d === 0) return 'Expires today';
+    if (d === 1) return 'Expires tomorrow';
+    return 'Expires in ' + d + ' days';
+  }
+
+  function isDisposal(purpose) { return /dispos|discard|waste/i.test(purpose || ''); }
+
+  function badge(status) { return '<span class="badge ' + esc(status) + '">' + esc(STATUS_LABEL[status] || status) + '</span>'; }
+
+  function priorityBadge(p) { return p ? '<span class="badge ' + esc(p) + '">' + esc(p) + '</span>' : ''; }
+
+  function greeting() {
+    var h = new Date().getHours();
+    return h < 12 ? 'Good morning!' : h < 18 ? 'Good afternoon!' : 'Good evening!';
+  }
+
+  function skeleton(n) {
+    var out = '';
+    for (var i = 0; i < n; i++) out += '<div class="skeleton"></div>';
+    return '<div class="cards" style="margin-top:14px">' + out + '</div>';
+  }
+
+  function section(title, html, hint) {
+    return '<section class="block"><h2>' + esc(title) + '</h2>' + (hint ? '<p class="hint" style="margin:-4px 0 10px">' + esc(hint) + '</p>' : '') + html + '</section>';
+  }
+
+  function callout(kind, text, extra) {
+    return '<div class="callout ' + kind + ' ' + (extra || '') + '" style="margin-top:14px">' + icon(kind === 'warn' ? 'alert' : 'info') + '<div><p>' + esc(text) + '</p></div></div>';
+  }
+
+  function emptyLine(text) { return '<p class="empty-line">' + esc(text) + '</p>'; }
+
+  function searchBox(id, placeholder, value) {
+    return '<label class="search"><span class="sr-only">' + esc(placeholder) + '</span>' + icon('search') +
+      '<input id="' + id + '" type="search" placeholder="' + esc(placeholder) + '" value="' + esc(value || '') + '" autocomplete="off"></label>';
+  }
+
+  function errorSlot(name) { return '<p class="error" data-error="' + name + '" hidden></p>'; }
+
+  function field(name, label, control, hint) {
+    return '<div class="field"><label for="' + name + '">' + esc(label) + '</label>' + control +
+      (hint ? '<p class="hint">' + esc(hint) + '</p>' : '') + errorSlot(name) + '</div>';
+  }
+
+  function radio(name, value, checked) {
+    return '<label><input type="radio" name="' + name + '" value="' + esc(value) + '"' + (checked ? ' checked' : '') + '><span>' + esc(value) + '</span></label>';
+  }
+
+  function stepper(name) {
+    return '<div class="stepper"><button type="button" data-step="-1" aria-label="Decrease">' + icon('minus') + '</button>' +
+      '<input id="' + name + '" name="' + name + '" type="number" inputmode="decimal" min="0" step="any" placeholder="0">' +
+      '<button type="button" data-step="1" aria-label="Increase">' + icon('plus') + '</button></div>';
+  }
+
+  function wireStepper(form) {
+    form.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-step]');
+      if (!b) return;
+      var input = form.elements.qty;
+      var v = Math.max(0, (Number(input.value) || 0) + Number(b.getAttribute('data-step')));
+      input.value = String(v);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  function itemRoute(id) { return 'item/' + encodeURIComponent(id); }
+
+  /* ================================================================== */
+  /* Server                                                              */
+  /* ================================================================== */
+
+  function call(action, payload) {
+    return new Promise(function (resolve, reject) {
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (res && res.ok) resolve(res.data);
+          else reject({ message: (res && res.error) || 'No answer from the server.', fields: res && res.fields, code: (res && res.code) || '' });
+        })
+        .withFailureHandler(function (err) {
+          reject({ network: true, message: (err && err.message) || 'Network error', code: 'network' });
+        })
+        .api(action, payload || {}, S.pin);
+    });
+  }
+
+  function rememberPin(pin) { try { sessionStorage.setItem(PIN_KEY, pin); } catch (e) { /* private mode */ } }
+  function forgetPin() { try { sessionStorage.removeItem(PIN_KEY); } catch (e) { /* private mode */ } }
+
+  function handleAuthError(err) {
+    if (!err || (err.code !== 'pin' && err.code !== 'locked')) return false;
+    S.pin = '';
+    forgetPin();
+    renderPin(err.message);
+    return true;
+  }
+
+  function invalidate() { S.inv = null; S.dashAt = 0; }
+
+  function loadInventory() {
+    if (S.inv && Date.now() - S.invAt < 20000) return Promise.resolve(S.inv);
+    return call('inventory').then(function (inv) { S.inv = inv; S.invAt = Date.now(); return inv; });
+  }
+
+  /* ================================================================== */
+  /* Toast and errors                                                    */
+  /* ================================================================== */
+
+  var toastTimer = null;
+  function toast(message, kind) {
+    if (!message) return;
+    toastEl.textContent = message;
+    toastEl.className = 'toast' + (kind === 'error' ? ' error' : '');
+    toastEl.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.hidden = true; }, kind === 'error' ? 6500 : 3200);
+  }
+
+  function viewError(err) {
+    if (handleAuthError(err)) return;
+    var view = document.getElementById('view');
+    if (!view) { renderFatal(err); return; }
+    var text = err && err.network ? 'Could not load. Check your connection.' : (err && err.message) || 'Something went wrong.';
+    view.innerHTML = '<div class="callout warn" style="margin-top:14px">' + icon('alert') + '<div><p>' + esc(text) +
+      '</p><button class="link" type="button" data-action="retry">Try again</button></div></div>';
+  }
+
+  function renderFatal(err) {
+    var setup = err && err.code === 'setup';
+    var text = err && err.network ? 'Could not reach ResQStock. Check your internet connection.' : (err && err.message) || 'Something went wrong.';
+    app.innerHTML = '<div class="pin-screen"><div class="pin-card">' + brandBlock('Managing supplies, nourishing lives') +
+      '<h1>' + (setup ? 'Not set up yet' : 'Could not open ResQStock') + '</h1><p>' + esc(text) + '</p>' +
+      '<button class="btn primary block" type="button" id="retry-boot">Try again</button></div></div>';
+    document.getElementById('retry-boot').addEventListener('click', function () { app.innerHTML = BOOT_HTML; boot(); });
+  }
+
+  /* ================================================================== */
+  /* Forms                                                               */
+  /* ================================================================== */
+
+  function formValues(form) {
+    var data = {};
+    Array.prototype.forEach.call(form.elements, function (el) {
+      if (!el.name) return;
+      if (el.type === 'checkbox') data[el.name] = el.checked;
+      else if (el.type === 'radio') { if (el.checked) data[el.name] = el.value; }
+      else data[el.name] = el.value;
+    });
+    return data;
+  }
+
+  function clearErrors(form) {
+    Array.prototype.forEach.call(form.querySelectorAll('[data-error]'), function (el) { el.hidden = true; el.textContent = ''; });
+    Array.prototype.forEach.call(form.querySelectorAll('[aria-invalid]'), function (el) { el.removeAttribute('aria-invalid'); });
+  }
+
+  function showErrors(form, fields) {
+    clearErrors(form);
+    var first = null;
+    Object.keys(fields || {}).forEach(function (key) {
+      var slot = form.querySelector('[data-error="' + key + '"]');
+      if (slot) { slot.textContent = fields[key]; slot.hidden = false; }
+      var el = form.elements[key];
+      if (el && el.setAttribute) {
+        el.setAttribute('aria-invalid', 'true');
+        if (!first) first = el;
+      }
+    });
+    if (first && first.focus) first.focus();
+  }
+
+  function setBusy(btn, busy, label) {
+    if (!btn) return;
+    if (busy) {
+      btn.setAttribute('data-label', btn.textContent);
+      btn.textContent = label || 'Saving…';
+      btn.disabled = true;
+    } else {
+      btn.textContent = btn.getAttribute('data-label') || btn.textContent;
+      btn.disabled = false;
+    }
+  }
+
+  function submit(form, action, payload, done) {
+    var btn = form.querySelector('[type=submit]');
+    clearErrors(form);
+    setBusy(btn, true);
+    call(action, payload).then(function (out) {
+      setBusy(btn, false);
+      done(out);
+    }).catch(function (err) {
+      setBusy(btn, false);
+      if (handleAuthError(err)) return;
+      if (err.fields) showErrors(form, err.fields);
+      toast(err.network
+        ? 'Could not reach the server. Check your connection, then check the item history before saving again.'
+        : err.message, 'error');
+    });
+  }
+
+  function afterWrite(out) {
+    invalidate();
+    // The save already returned the updated item, so the item page can show it without asking again.
+    S.itemCache = { id: out.item.id, res: out, at: Date.now() };
+    toast(out.message);
+    go(itemRoute(out.item.id));
+  }
+
+  /* ================================================================== */
+  /* Router and shell                                                    */
+  /* ================================================================== */
+
+  function parseRoute() {
+    var h = (location.hash || '').replace(/^#\/?/, '');
+    var parts = h.split('?');
+    var query = {};
+    (parts[1] || '').split('&').forEach(function (kv) {
+      if (!kv) return;
+      var p = kv.split('=');
+      query[decodeURIComponent(p[0])] = decodeURIComponent(p.slice(1).join('=') || '');
+    });
+    var seg = parts[0].split('/');
+    return { name: seg[0] || 'home', id: seg[1] ? decodeURIComponent(seg.slice(1).join('/')) : '', query: query };
+  }
+
+  function go(path) {
+    var current = (location.hash || '').replace(/^#/, '');
+    if (current === path) { render(); return; }
+    try { location.hash = path; } catch (e) { render(); }
+  }
+
+  function isCurrent(token) { return token === renderToken; }
+
+  var VIEWS = {};
+
+  function render() {
+    if (!S.boot) return;
+    var route = parseRoute();
+    var view = VIEWS[route.name] || VIEWS.home;
+    var token = ++renderToken;
+    window.scrollTo(0, 0);
+    view(route, token);
+  }
+
+  function brandBlock(tag) {
+    return '<div class="brand">' + logo() + '<div class="brand-text"><p class="brand-name">ResQStock</p><p class="brand-tag">' + esc(tag) + '</p></div></div>';
+  }
+
+  function tabbar(active) {
+    var tabs = [['', 'home', 'home', 'Home'], ['inventory', 'inventory', 'box', 'Inventory'], ['wishlist', 'wishlist', 'heart', 'Wishlist'], ['more', 'more', 'more', 'More']];
+    return '<nav class="tabbar" aria-label="Main"><div class="tabbar-inner">' + tabs.map(function (t) {
+      var on = t[1] === active;
+      return '<button class="tab' + (on ? ' active' : '') + '" type="button" data-go="' + t[0] + '"' + (on ? ' aria-current="page"' : '') + '>' + icon(t[2]) + '<span>' + t[3] + '</span></button>';
+    }).join('') + '</div></nav>';
+  }
+
+  /** o = { tab, brand, title, back, actions, body } */
+  function shell(o) {
+    var top = o.brand
+      ? '<header class="topbar">' + brandBlock('Managing supplies, nourishing lives') +
+        '<button class="icon-btn" type="button" data-go="settings" aria-label="Settings">' + icon('sliders') + '</button></header>'
+      : '<header class="topbar"><button class="icon-btn" type="button" data-back="' + esc(o.back || '') + '" aria-label="Back">' + icon('back') + '</button>' +
+        '<h1 class="title">' + esc(o.title || '') + '</h1>' + (o.actions || '') + '</header>';
+    app.innerHTML = '<div class="shell">' + top + '<main class="view" id="view">' + o.body + '</main>' + tabbar(o.tab) + '</div>';
+  }
+
+  var ACTIONS = {
+    retry: function () { render(); },
+    print: function () { window.print(); },
+    signout: function () { forgetPin(); S.pin = ''; S.boot = null; renderPin(''); },
+    publish: function (btn) {
+      setBusy(btn, true, 'Publishing…');
+      call('publishWishlist').then(function (res) {
+        setBusy(btn, false);
+        toast(res.ok ? 'Published: ' + res.count + ' items on the donor wishlist.' : res.skipped, res.ok ? '' : 'error');
+        render();
+      }).catch(function (err) {
+        setBusy(btn, false);
+        if (!handleAuthError(err)) toast(err.network ? 'Could not reach the server.' : err.message, 'error');
+      });
+    }
+  };
+
+  app.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-go],[data-back],[data-action]');
+    if (!t || t.disabled) return;
+    if (t.hasAttribute('data-go')) {
+      e.preventDefault();
+      go(t.getAttribute('data-go'));
+    } else if (t.hasAttribute('data-back')) {
+      e.preventDefault();
+      go(t.getAttribute('data-back'));
+    } else {
+      var fn = ACTIONS[t.getAttribute('data-action')];
+      if (fn) { e.preventDefault(); fn(t, e); }
+    }
+  });
+
+  window.addEventListener('hashchange', render);
+
+  /* ================================================================== */
+  /* Shared pieces                                                       */
+  /* ================================================================== */
+
+  function itemCard(it, route, disabled) {
+    var qty = it.stock > 0 ? 'Qty: ' + qtyText(it.stock, it.unit) : 'Out of stock';
+    var next = it.stock > 0 ? (it.nearestExpiry ? 'Next expiry: ' + fmtDay(it.nearestExpiry) : 'No expiry date') : '';
+    return '<button class="row-card" type="button" data-go="' + esc(route || itemRoute(it.id)) + '"' + (disabled ? ' disabled' : '') + '>' + thumb(it.category) +
+      '<span class="main"><span class="name">' + esc(it.name) + '</span>' +
+      '<span class="meta">' + esc([it.category, qty].filter(Boolean).join(' · ')) + '</span>' +
+      (next ? '<span class="meta">' + esc(next) + '</span>' : '') +
+      (it.unlisted ? '<span class="meta">Not in the item list yet</span>' : '') +
+      '</span><span class="side">' + badge(it.status) + '</span></button>';
+  }
+
+  function itemLine(it) {
+    var stock = 'In stock: ' + qtyText(it.stock, it.unit) + (it.expiredQty > 0 ? ' (' + qtyText(it.expiredQty, it.unit) + ' expired)' : '');
+    return '<div class="item-line">' + thumb(it.category) + '<div><div class="name">' + esc(it.name) + '</div><div class="meta">' + esc(stock) + '</div></div></div>';
+  }
+
+  function batchLabel(b, unit) {
+    return (b.expiry ? 'Exp ' + fmtDay(b.expiry) : 'No expiry date') + ' · ' + qtyText(b.remaining, unit) + ' left' + (b.status === 'expired' ? ' · expired' : '');
+  }
+
+  /* ================================================================== */
+  /* Home                                                                */
+  /* ================================================================== */
+
+  function statCard(label, n, unit, kind, route) {
+    return '<button class="stat ' + kind + '" type="button" data-go="' + route + '"><span class="stat-label">' + esc(label) + '</span>' +
+      '<span class="num">' + esc(n) + '</span><span class="unit">' + esc(unit) + '</span></button>';
+  }
+
+  function tile(iconName, label, route, primary) {
+    return '<button class="tile' + (primary ? ' primary' : '') + '" type="button" data-go="' + route + '">' + icon(iconName) + '<span>' + esc(label) + '</span></button>';
+  }
+
+  function alertCard(a) {
+    return '<button class="row-card" type="button" data-go="' + esc(itemRoute(a.itemId)) + '">' + thumb(a.category) +
+      '<span class="main"><span class="name">' + esc(a.itemName) + '</span><span class="meta">' + esc(qtyText(a.remaining, a.unit) + ' left · ' + daysText(a.daysLeft)) + '</span></span>' +
+      '<span class="side">' + badge(a.status) + '</span></button>';
+  }
+
+  function renderHome() {
+    var d = S.boot.dashboard;
+    var c = d.counts;
+    var stats = '<div class="stats">' +
+      statCard('Items in stock', c.itemsInStock, c.itemsInStock === 1 ? 'item' : 'items', 'total', 'inventory') +
+      statCard('Expiring soon', c.soonBatches, c.soonBatches === 1 ? 'batch' : 'batches', 'soon', 'inventory?status=soon') +
+      statCard('Expired', c.expiredBatches, c.expiredBatches === 1 ? 'batch' : 'batches', 'expired', 'inventory?status=expired') +
+      '</div>';
+    var hero = '<section class="hero"><h1 class="hello">' + esc(greeting()) + '</h1><p class="sub">Here’s your inventory overview for ' +
+      esc(fmtDay(S.boot.today)) + '.</p>' + stats + '</section>';
+    var alerts = d.alerts.length
+      ? d.alerts.map(alertCard).join('')
+      : emptyLine('Nothing is expiring in the next ' + S.boot.settings.soonDays + ' days.');
+    var viewAll = d.totalAlerts ? '<button class="link" type="button" data-go="inventory?status=alerts">View all ' + d.totalAlerts + '</button>' : '';
+    var warnings = (d.warnings || []).slice(0, 3).map(function (w) { return callout('warn', w); }).join('');
+    var body = hero +
+      '<section class="block"><div class="section-head"><h2>Expiry alerts</h2>' + viewAll + '</div><div class="cards">' + alerts + '</div></section>' +
+      '<section class="block"><h2>Quick actions</h2><div class="actions">' +
+        tile('in', 'Stock in', 'pick?for=in', true) +
+        tile('out', 'Stock out', 'pick?for=out', true) +
+        tile('scan', 'Scan a shelf QR', 'scan') +
+        tile('box', 'Inventory', 'inventory') +
+        tile('heart', 'Donor wishlist', 'wishlist') +
+        tile('plus', 'Add item', 'add') +
+      '</div></section>' + warnings;
+    shell({ tab: 'home', brand: true, body: body });
+  }
+
+  VIEWS.home = function (route, token) {
+    renderHome();
+    if (Date.now() - S.dashAt > 30000) {
+      call('dashboard').then(function (res) {
+        S.boot.dashboard = res.dashboard;
+        S.boot.today = res.today;
+        S.dashAt = Date.now();
+        if (isCurrent(token)) renderHome();
+      }).catch(function (err) { handleAuthError(err); });
+    }
+  };
+
+  /* ================================================================== */
+  /* Choose an item (for stock in / out)                                 */
+  /* ================================================================== */
+
+  VIEWS.pick = function (route, token) {
+    var mode = route.query['for'] === 'out' ? 'out' : 'in';
+    shell({
+      tab: 'home',
+      title: mode === 'out' ? 'Stock out: choose item' : 'Stock in: choose item',
+      back: '',
+      body: '<div class="toolbar">' + searchBox('pick-q', 'Search items') + '</div><div class="cards" id="pick-list">' + skeleton(4) + '</div>'
+    });
+    loadInventory().then(function (inv) {
+      if (!isCurrent(token)) return;
+      var input = document.getElementById('pick-q');
+      var draw = function () {
+        var q = normalize(input.value);
+        var items = inv.items.filter(function (it) { return !q || normalize(it.name + ' ' + it.category + ' ' + it.id).indexOf(q) >= 0; });
+        if (mode === 'out') items.sort(function (a, b) { return (b.stock > 0 ? 1 : 0) - (a.stock > 0 ? 1 : 0); });
+        document.getElementById('pick-list').innerHTML = items.length
+          ? items.map(function (it) { return itemCard(it, mode + '/' + encodeURIComponent(it.id), mode === 'out' && !(it.stock > 0)); }).join('')
+          : emptyLine(inv.items.length ? 'No items match.' : 'No items yet. Add one from Inventory.');
+      };
+      input.addEventListener('input', draw);
+      draw();
+    }).catch(function (err) { if (isCurrent(token)) viewError(err); });
+  };
+
+  /* ================================================================== */
+  /* Inventory                                                           */
+  /* ================================================================== */
+
+  VIEWS.inventory = function (route, token) {
+    var status = FILTER_LABEL[route.query.status] ? route.query.status : '';
+    shell({
+      tab: 'inventory',
+      title: 'Inventory',
+      back: '',
+      actions: '<button class="btn small primary" type="button" data-go="add">' + icon('plus') + 'Add item</button>',
+      body: '<div class="toolbar">' + searchBox('inv-q', 'Search items', S.q) + '<div class="chips" id="inv-chips"></div></div>' +
+        '<p class="count-line" id="inv-count"></p><div class="cards" id="inv-list">' + skeleton(5) + '</div>'
+    });
+    loadInventory().then(function (inv) {
+      if (!isCurrent(token)) return;
+      var input = document.getElementById('inv-q');
+      var chips = document.getElementById('inv-chips');
+      var cats = inv.categories.filter(function (c) {
+        return inv.items.some(function (it) { return normalize(it.category) === normalize(c); });
+      });
+      function chip(value, label) {
+        var on = normalize(S.cat) === normalize(value);
+        return '<button class="chip' + (on ? ' active' : '') + '" type="button" data-cat="' + esc(value) + '" aria-pressed="' + on + '">' + esc(label) + '</button>';
+      }
+      function drawChips() {
+        chips.innerHTML = (status ? '<button class="chip filter" type="button" data-go="inventory" aria-label="Clear filter">' + esc(FILTER_LABEL[status]) + ' ✕</button>' : '') +
+          chip('', 'All') + cats.map(function (c) { return chip(c, c); }).join('');
+      }
+      function draw() {
+        S.q = input.value;
+        var q = normalize(S.q);
+        var items = inv.items.filter(function (it) {
+          if (S.cat && normalize(it.category) !== normalize(S.cat)) return false;
+          if (q && normalize(it.name + ' ' + it.category + ' ' + it.id).indexOf(q) < 0) return false;
+          if (status === 'soon') return it.soonQty > 0;
+          if (status === 'expired') return it.expiredQty > 0;
+          if (status === 'alerts') return it.soonQty > 0 || it.expiredQty > 0;
+          if (status === 'out') return !(it.stock > 0);
+          return true;
+        });
+        if (status) {
+          items.sort(function (a, b) {
+            var da = a.daysToNearest === null ? 1e9 : a.daysToNearest;
+            var db = b.daysToNearest === null ? 1e9 : b.daysToNearest;
+            return da - db;
+          });
+        }
+        document.getElementById('inv-count').textContent = items.length + (items.length === 1 ? ' item' : ' items');
+        document.getElementById('inv-list').innerHTML = items.length
+          ? items.map(function (it) { return itemCard(it); }).join('')
+          : emptyLine(inv.items.length ? 'No items match.' : 'No items yet. Add your first item.');
+      }
+      chips.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-cat]');
+        if (!b) return;
+        S.cat = b.getAttribute('data-cat');
+        drawChips();
+        draw();
+      });
+      input.addEventListener('input', draw);
+      drawChips();
+      draw();
+    }).catch(function (err) { if (isCurrent(token)) viewError(err); });
+  };
+
+  /* ================================================================== */
+  /* Item page                                                           */
+  /* ================================================================== */
+
+  function figure(label, n, unit) {
+    return '<div class="figure"><div class="k">' + esc(label) + '</div><div class="v">' + esc(fmtNum(n)) + (unit ? ' <small>' + esc(unit) + '</small>' : '') + '</div></div>';
+  }
+
+  function batchRow(b, unit, first) {
+    var sub = [b.expiry ? fmtDay(b.expiry) : '', fmtNum(b.remaining) + ' of ' + qtyText(b.qtyIn, unit) + ' left',
+      b.received ? 'received ' + fmtDay(b.received) : '', b.source].filter(Boolean).join(' · ');
+    return '<div class="list-row"><div class="main"><div class="t">' + esc(daysText(b.daysLeft)) + '</div><div class="s">' + esc(sub) + '</div>' +
+      (first ? '<div class="s ok">Use this batch first</div>' : '') + '</div>' + badge(b.status) + '</div>';
+  }
+
+  function historyRow(h, unit) {
+    var inbound = h.kind === 'in';
+    var meta = [fmtDay(h.date), h.expiry ? 'expires ' + fmtDay(h.expiry) : '', h.by].filter(Boolean).join(' · ');
+    return '<div class="list-row"><span class="' + (inbound ? 'qty-in' : 'qty-out') + '">' + (inbound ? '+' : '−') + esc(fmtNum(h.qty)) + '</span>' +
+      '<div class="main"><div class="t">' + esc((inbound ? 'Stock in' : 'Stock out') + (h.detail ? ' · ' + h.detail : '')) + '</div><div class="s">' + esc(meta) + '</div></div></div>';
+  }
+
+  function renderItem(res) {
+    var it = res.item;
+    var id = encodeURIComponent(it.id);
+    var hero = '<section class="item-hero"><div class="top">' + thumb(it.category) +
+      '<div class="main" style="flex:1;min-width:0"><h2>' + esc(it.name) + '</h2><div class="meta">' +
+      esc([it.category, 'In stock: ' + qtyText(it.stock, it.unit)].filter(Boolean).join(' · ')) + '</div></div>' + badge(it.status) + '</div>' +
+      '<div class="figures">' + figure('Usable', it.usable, it.unit) + figure('Expiring soon', it.soonQty, it.unit) + figure('Expired', it.expiredQty, it.unit) + '</div></section>';
+    var buttons = '<div class="btn-row">' +
+      '<button class="btn primary" type="button" data-go="in/' + id + '">' + icon('in') + 'Stock in</button>' +
+      '<button class="btn secondary" type="button" data-go="out/' + id + '"' + (it.stock > 0 ? '' : ' disabled') + '>' + icon('out') + 'Stock out</button></div>';
+    var notes = '';
+    if (it.unlisted) notes += callout('warn', 'This item is in your stock tabs but not in RQ_Items yet. Run ResQStock > Set up or check in the sheet to add it.');
+    if (it.deficit > 0) notes += callout('warn', qtyText(it.deficit, it.unit) + ' more was recorded out than in. Check the stock tabs in the sheet.');
+    var batches = it.batches.length
+      ? '<div class="list">' + it.batches.map(function (b) { return batchRow(b, it.unit, b.key === it.suggestedBatch && it.batches.length > 1); }).join('') + '</div>'
+      : emptyLine('No stock on hand.');
+    var w = it.wishlist;
+    var wishText = w.listed
+      ? 'On the donor wishlist: needs ' + qtyText(w.needed, it.unit) + ' · ' + w.priority + ' priority.'
+      : 'Not on the donor wishlist' + (w.reason ? ': ' + w.reason.toLowerCase() : '') + '.';
+    var wish = '<div class="callout">' + icon('heart') + '<div><p>' + esc(wishText) + '</p>' +
+      '<button class="link" type="button" data-go="wishlist?id=' + id + '">Change wishlist settings</button></div></div>';
+    var history = it.history.length
+      ? '<div class="list">' + it.history.map(function (h) { return historyRow(h, it.unit); }).join('') + '</div>'
+      : emptyLine('No movements recorded yet.');
+    shell({
+      tab: 'inventory',
+      title: it.name,
+      back: 'inventory',
+      body: hero + buttons + notes +
+        section('Batches', batches, it.batches.length > 1 ? 'First expiry, first out: the top batch goes first.' : '') +
+        section('Donor wishlist', wish) +
+        section('Recent movements', history)
+    });
+  }
+
+  VIEWS.item = function (route, token) {
+    var cached = S.itemCache;
+    S.itemCache = null;
+    if (cached && cached.id === route.id && Date.now() - cached.at < 10000) {
+      renderItem(cached.res);
+      return;
+    }
+    shell({ tab: 'inventory', title: 'Item', back: 'inventory', body: skeleton(3) });
+    call('item', { id: route.id }).then(function (res) {
+      if (isCurrent(token)) renderItem(res);
+    }).catch(function (err) { if (isCurrent(token)) viewError(err); });
+  };
+
+  /* ================================================================== */
+  /* Stock in                                                            */
+  /* ================================================================== */
+
+  function renderStockIn(res) {
+    var it = res.item;
+    var caps = res.capabilities;
+    var today = res.today;
+    var st = S.boot.settings;
+    var sources = st.sources.length ? st.sources : ['Donation'];
+    var expiryField = caps.expiry
+      ? '<div class="field"><label for="expiry">Expiry date</label><input id="expiry" name="expiry" type="date">' +
+        '<label class="check"><input type="checkbox" name="noExpiry" id="noExpiry"> No expiry date (for example soap)</label>' +
+        '<p class="hint" id="expiry-hint"></p>' + errorSlot('expiry') + '</div>'
+      : '<p class="hint">Expiry dates are off: the stock-in tab has no expiry date column.</p>';
+    var body = '<form class="form" id="f-in" novalidate>' + itemLine(it) +
+      '<div class="field"><label for="qty">Quantity received</label>' + stepper('qty') +
+        '<p class="unit-line">' + esc(it.unit ? 'Counted in ' + it.unit : 'Number of units') + '</p>' + errorSlot('qty') + '</div>' +
+      expiryField +
+      '<fieldset class="field"><legend>Source</legend><div class="segmented">' +
+        sources.map(function (s, i) { return radio('source', s, i === 0); }).join('') + '</div></fieldset>' +
+      field('received', 'Received on', '<input id="received" name="received" type="date" value="' + esc(today) + '" max="' + esc(today) + '">') +
+      '<div class="form-actions"><button class="btn primary block" type="submit">Save stock in</button></div></form>';
+    shell({ tab: 'inventory', title: 'Stock in', back: itemRoute(it.id), body: body });
+
+    var form = document.getElementById('f-in');
+    wireStepper(form);
+    if (caps.expiry) {
+      var exp = form.elements.expiry;
+      var none = form.elements.noExpiry;
+      var hint = document.getElementById('expiry-hint');
+      var update = function () {
+        exp.disabled = none.checked;
+        hint.className = 'hint';
+        hint.textContent = '';
+        if (none.checked || !exp.value) return;
+        var d = dayNum(exp.value) - dayNum(today);
+        if (d < 0) {
+          hint.className = 'hint warn';
+          hint.textContent = 'This date has passed. The batch will show as Expired.';
+        } else if (d <= st.soonDays) {
+          hint.className = 'hint warn';
+          hint.textContent = 'This batch will show as Expiring soon (' + daysText(d).toLowerCase() + ').';
+        }
+      };
+      exp.addEventListener('input', update);
+      exp.addEventListener('change', update);
+      none.addEventListener('change', update);
+    }
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var v = formValues(form);
+      var errors = {};
+      if (!(Number(v.qty) > 0)) errors.qty = 'Enter a quantity above 0.';
+      if (caps.expiry && !v.noExpiry && !v.expiry) errors.expiry = 'Enter the expiry date, or tick "No expiry date".';
+      if (Object.keys(errors).length) { showErrors(form, errors); return; }
+      submit(form, 'stockIn', {
+        itemId: it.id,
+        qty: v.qty,
+        expiry: v.noExpiry ? '' : (v.expiry || ''),
+        noExpiry: !!v.noExpiry,
+        source: v.source || '',
+        received: v.received || today
+      }, afterWrite);
+    });
+  }
+
+  VIEWS['in'] = function (route, token) {
+    if (!route.id) { go('pick?for=in'); return; }
+    shell({ tab: 'inventory', title: 'Stock in', back: itemRoute(route.id), body: skeleton(3) });
+    call('item', { id: route.id }).then(function (res) {
+      if (isCurrent(token)) renderStockIn(res);
+    }).catch(function (err) { if (isCurrent(token)) viewError(err); });
+  };
+
+  /* ================================================================== */
+  /* Stock out                                                           */
+  /* ================================================================== */
+
+  function renderStockOut(res) {
+    var it = res.item;
+    var caps = res.capabilities;
+    var st = S.boot.settings;
+    var purposes = st.purposes.length ? st.purposes : ['Distribution'];
+    var preferred = purposes.filter(function (p) { return !isDisposal(p); })[0] || purposes[0];
+    var suggested = it.batches.filter(function (b) { return b.key === it.suggestedBatch; })[0] || it.batches[0];
+    var oldest = it.batches.filter(function (b) { return b.status === 'expired'; })[0];
+    // Mirrors the server: distribution skips expired stock, disposal takes it first.
+    var autoLabel = function (purpose) {
+      if (isDisposal(purpose) && oldest) return 'Expired stock first (' + batchLabel(oldest, it.unit) + ')';
+      var first = isDisposal(purpose) ? it.batches[0] : suggested;
+      return 'Earliest expiry first' + (first ? ' (' + batchLabel(first, it.unit) + ')' : '');
+    };
+    var batchField;
+    if (caps.batchIds && it.batches.length > 1) {
+      batchField = '<div class="field"><label for="batch">Take from</label><select id="batch" name="batch">' +
+        '<option value="auto">' + esc(autoLabel(preferred)) + '</option>' +
+        it.batches.map(function (b) { return '<option value="' + esc(b.key) + '">' + esc(batchLabel(b, it.unit)) + '</option>'; }).join('') +
+        '</select>' + errorSlot('batch') + '</div>';
+    } else {
+      batchField = '<p class="hint">Taken from the earliest-expiring stock first.</p>';
+    }
+    var available = 'Usable now: ' + qtyText(it.usable, it.unit) + (it.expiredQty > 0 ? ' · expired: ' + qtyText(it.expiredQty, it.unit) : '');
+    var body = '<form class="form" id="f-out" novalidate>' + itemLine(it) +
+      '<div class="field"><label for="qty">Quantity going out</label>' + stepper('qty') +
+        '<p class="unit-line">' + esc(available) + '</p>' + errorSlot('qty') + '</div>' +
+      '<fieldset class="field"><legend>Purpose</legend><div class="segmented">' +
+        purposes.map(function (p) { return radio('purpose', p, p === preferred); }).join('') + '</div>' +
+        '<p class="hint" id="purpose-hint"></p>' + errorSlot('purpose') + '</fieldset>' +
+      batchField +
+      '<div class="form-actions"><button class="btn primary block" type="submit">Save stock out</button></div></form>';
+    shell({ tab: 'inventory', title: 'Stock out', back: itemRoute(it.id), body: body });
+
+    var form = document.getElementById('f-out');
+    wireStepper(form);
+    var hint = document.getElementById('purpose-hint');
+    form.addEventListener('change', function (e) {
+      if (e.target.name !== 'purpose') return;
+      hint.textContent = isDisposal(e.target.value) ? 'Expired stock is taken first.' : '';
+      if (form.elements.batch) form.elements.batch.options[0].textContent = autoLabel(e.target.value);
+    });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var v = formValues(form);
+      if (!(Number(v.qty) > 0)) { showErrors(form, { qty: 'Enter a quantity above 0.' }); return; }
+      submit(form, 'stockOut', { itemId: it.id, qty: v.qty, purpose: v.purpose || '', batch: v.batch || 'auto' }, afterWrite);
+    });
+  }
+
+  VIEWS.out = function (route, token) {
+    if (!route.id) { go('pick?for=out'); return; }
+    shell({ tab: 'inventory', title: 'Stock out', back: itemRoute(route.id), body: skeleton(3) });
+    call('item', { id: route.id }).then(function (res) {
+      if (isCurrent(token)) renderStockOut(res);
+    }).catch(function (err) { if (isCurrent(token)) viewError(err); });
+  };
+
+  /* ================================================================== */
+  /* Add item                                                            */
+  /* ================================================================== */
+
+  VIEWS.add = function () {
+    var cats = S.boot.categories || [];
+    var body = '<form class="form" id="f-add" novalidate>' +
+      field('name', 'Item name', '<input id="name" name="name" type="text" maxlength="80" autocomplete="off" placeholder="e.g. Canned sardines">') +
+      field('category', 'Category', '<select id="category" name="category"><option value="">Choose a category</option>' +
+        cats.map(function (c) { return '<option>' + esc(c) + '</option>'; }).join('') + '</select>') +
+      field('unit', 'Unit', '<input id="unit" name="unit" type="text" list="unit-list" maxlength="20" placeholder="e.g. tins"><datalist id="unit-list">' +
+        UNITS.map(function (u) { return '<option value="' + u + '">'; }).join('') + '</datalist>', 'What you count: tins, bags, packs…') +
+      field('target', 'Target level (optional)', '<input id="target" name="target" type="number" inputmode="numeric" min="0" step="1" placeholder="e.g. 40">',
+        'How many KSK wants on hand. The donor wishlist asks for the difference.') +
+      '<label class="check"><input type="checkbox" name="show"> Show on the donor wishlist when below the target</label>' +
+      '<div class="form-actions"><button class="btn primary block" type="submit">Add item</button></div></form>';
+    shell({ tab: 'inventory', title: 'Add item', back: 'inventory', body: body });
+    var form = document.getElementById('f-add');
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var v = formValues(form);
+      if (!normalize(v.name)) { showErrors(form, { name: 'Enter the item name.' }); return; }
+      submit(form, 'addItem', { name: v.name, category: v.category, unit: v.unit, target: v.target, show: !!v.show }, function (out) {
+        invalidate();
+        toast(out.message);
+        go(itemRoute(out.id));
+      });
+    });
+  };
+
+  /* ================================================================== */
+  /* Donor wishlist manager                                              */
+  /* ================================================================== */
+
+  function wishRow(w) {
+    var state = w.listed ? 'Needs ' + qtyText(w.needed, w.unit) + ' · ' + w.priority : (w.reason || 'Not listed');
+    return '<form class="wish-row" data-id="' + esc(w.id) + '" novalidate>' +
+      '<div class="head"><span class="name">' + esc(w.name) + '</span><span class="state' + (w.listed ? ' on' : '') + '">' + esc(state) + '</span></div>' +
+      '<div class="wish-fields">' +
+        '<label>Target level<input type="number" name="target" min="0" step="1" inputmode="numeric" value="' + (w.target > 0 ? esc(w.target) : '') + '" placeholder="None"></label>' +
+        '<label>Priority<select name="override"><option value="">Auto' + (w.computedPriority ? ' (' + esc(w.computedPriority) + ')' : '') + '</option>' +
+          ['High', 'Medium', 'Low'].map(function (p) { return '<option' + (w.override === p ? ' selected' : '') + '>' + p + '</option>'; }).join('') +
+        '</select></label>' +
+        '<label class="check"><input type="checkbox" name="show"' + (w.show ? ' checked' : '') + '> Show to donors</label>' +
+        '<button class="btn small primary" type="submit" disabled>Save</button>' +
+      '</div>' +
+      '<div class="wish-foot"><span>Usable stock: ' + esc(qtyText(w.usable, w.unit)) + '</span>' +
+        (w.unlisted ? '<span>Saving adds it to RQ_Items</span>' : '') + '</div>' +
+      errorSlot('target') + errorSlot('override') +
+    '</form>';
+  }
+
+  function previewList(preview) {
+    return preview.length
+      ? '<div class="list">' + preview.map(function (p) {
+          return '<div class="preview-row"><span><strong>' + esc(p.name) + '</strong><br><span class="hint">Needed: ' + esc(p.needed) + '</span></span>' + priorityBadge(p.priority) + '</div>';
+        }).join('') + '</div>'
+      : emptyLine('No items are on the donor wishlist right now.');
+  }
+
+  function renderWishlist(res, focusId) {
+    var status = res.wishlistConfigured
+      ? (res.lastSync ? 'Last published ' + fmtStamp(res.lastSync) + '.' : 'Not published yet.')
+      : 'There is no public wishlist spreadsheet yet. An admin can create one from the ResQStock menu in the sheet.';
+    var intro = '<div class="callout" style="margin-top:14px">' + icon('info') + '<div><p>Donors see only the item name, quantity needed, priority and last updated date. Nothing else from the sheet is public.</p>' +
+      '<p class="hint">' + esc(status) + '</p></div></div>';
+    var actions = '<div class="btn-row"><button class="btn primary" type="button" data-action="publish"' + (res.wishlistConfigured ? '' : ' disabled') + '>Publish now</button>' +
+      (res.wishlistPageUrl ? '<a class="btn secondary" href="' + esc(res.wishlistPageUrl) + '" target="_blank" rel="noopener">' + icon('external') + 'Public page</a>' : '<span></span>') + '</div>';
+    var body = intro + actions +
+      '<section class="block"><h2 id="preview-title">What donors see now (' + res.preview.length + ')</h2><div id="preview">' + previewList(res.preview) + '</div></section>' +
+      '<section class="block"><h2>Items</h2><p class="hint" style="margin:-4px 0 6px">High priority below ' + Math.round(res.highBelow * 100) + '% of the target. Change this in Settings.</p>' +
+        '<div class="toolbar" style="top:60px">' + searchBox('wish-q', 'Search items', S.wishQ) + '<div class="chips" id="wish-chips"></div></div>' +
+        '<div class="cards" id="wish-list"></div></section>';
+    shell({ tab: 'wishlist', title: 'Donor wishlist', back: '', body: body });
+
+    var rows = res.rows.slice();
+    var input = document.getElementById('wish-q');
+    var chips = document.getElementById('wish-chips');
+    var list = document.getElementById('wish-list');
+    var FILTERS = [['all', 'All'], ['listed', 'On the wishlist'], ['hidden', 'Hidden'], ['notarget', 'No target']];
+    function drawChips() {
+      chips.innerHTML = FILTERS.map(function (f) {
+        var on = S.wishFilter === f[0];
+        return '<button class="chip' + (on ? ' active' : '') + '" type="button" data-filter="' + f[0] + '" aria-pressed="' + on + '">' + f[1] + '</button>';
+      }).join('');
+    }
+    function draw() {
+      S.wishQ = input.value;
+      var q = normalize(S.wishQ);
+      var shown = rows.filter(function (w) {
+        if (q && normalize(w.name + ' ' + w.category).indexOf(q) < 0) return false;
+        if (S.wishFilter === 'listed') return w.listed;
+        if (S.wishFilter === 'hidden') return !w.show;
+        if (S.wishFilter === 'notarget') return !(w.target > 0);
+        return true;
+      });
+      list.innerHTML = shown.length ? shown.map(wishRow).join('') : emptyLine('No items match.');
+    }
+    chips.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-filter]');
+      if (!b) return;
+      S.wishFilter = b.getAttribute('data-filter');
+      drawChips();
+      draw();
+    });
+    input.addEventListener('input', draw);
+    list.addEventListener('input', markDirty);
+    list.addEventListener('change', markDirty);
+    function markDirty(e) {
+      var form = e.target.closest('.wish-row');
+      if (form) form.querySelector('[type=submit]').disabled = false;
+    }
+    list.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var form = e.target;
+      var id = form.getAttribute('data-id');
+      var v = formValues(form);
+      submit(form, 'updateWishlistItem', { id: id, target: v.target, show: !!v.show, override: v.override }, function (out) {
+        invalidate();
+        rows = rows.map(function (w) { return w.id === id ? out.row : w; });
+        var holder = document.createElement('div');
+        holder.innerHTML = wishRow(out.row);
+        form.parentNode.replaceChild(holder.firstChild, form);
+        toast('Saved ' + out.row.name + '.' + (out.sync && out.sync.ok ? ' Donor wishlist updated.' : ''));
+        call('wishlistAdmin').then(function (fresh) {
+          var p = document.getElementById('preview');
+          if (!p) return;
+          p.innerHTML = previewList(fresh.preview);
+          document.getElementById('preview-title').textContent = 'What donors see now (' + fresh.preview.length + ')';
+        }).catch(function () {});
+      });
+    });
+    drawChips();
+    draw();
+    if (focusId) {
+      var target = list.querySelector('[data-id="' + (window.CSS && CSS.escape ? CSS.escape(focusId) : focusId) + '"]');
+      if (target) {
+        target.scrollIntoView({ block: 'center' });
+        target.classList.add('flash');
+      }
+    }
+  }
+
+  VIEWS.wishlist = function (route, token) {
+    shell({ tab: 'wishlist', title: 'Donor wishlist', back: '', body: skeleton(4) });
+    call('wishlistAdmin').then(function (res) {
+      if (isCurrent(token)) renderWishlist(res, route.query.id);
+    }).catch(function (err) { if (isCurrent(token)) viewError(err); });
+  };
+
+  /* ================================================================== */
+  /* More, settings, scan help                                           */
+  /* ================================================================== */
+
+  function menuRow(iconName, route, title, sub) {
+    return '<button class="row-card" type="button" data-go="' + route + '"><span class="thumb c0">' + icon(iconName) + '</span>' +
+      '<span class="main"><span class="name">' + esc(title) + '</span><span class="meta">' + esc(sub) + '</span></span>' +
+      '<span class="chev">' + icon('chevron') + '</span></button>';
+  }
+
+  VIEWS.more = function () {
+    var b = S.boot;
+    var rows = menuRow('sliders', 'settings', 'Settings', 'Expiry window, wishlist priority, sheet connection') +
+      menuRow('qr', 'labels', 'QR labels', 'Print shelf labels and the donor QR code') +
+      menuRow('scan', 'scan', 'How to scan a shelf QR', 'Open an item with your phone camera');
+    if (b.wishlistPageUrl) {
+      rows += '<a class="row-card" href="' + esc(b.wishlistPageUrl) + '" target="_blank" rel="noopener"><span class="thumb c3">' + icon('heart') + '</span>' +
+        '<span class="main"><span class="name">Public donor wishlist</span><span class="meta">Opens the page donors see</span></span><span class="chev">' + icon('external') + '</span></a>';
+    }
+    var about = '<dl class="kv"><dt>Signed in as</dt><dd>' + esc(b.user || 'Not shown') + '</dd>' +
+      '<dt>Access</dt><dd>' + (b.pinRequired ? 'Staff PIN' : 'Google sign-in') + '</dd>' +
+      '<dt>Version</dt><dd>' + esc(b.version) + '</dd></dl>' +
+      (b.pinRequired ? '<button class="btn secondary block" type="button" data-action="signout" style="margin-top:14px">Sign out</button>' : '');
+    shell({ tab: 'more', title: 'More', back: '', body: '<section class="block"><div class="list menu-list">' + rows + '</div></section>' + section('About', about) });
+  };
+
+  function renderSettings(res) {
+    var s = res.settings;
+    var form = '<form class="form" id="f-set" novalidate>' +
+      field('soonDays', 'Expiring soon window (days)', '<input id="soonDays" name="soonDays" type="number" inputmode="numeric" min="1" max="90" step="1" value="' + esc(s.soonDays) + '">',
+        'Batches that expire within this many days show as Expiring soon. The plan default is 14.') +
+      field('highBelowPercent', 'High priority below (% of target)', '<input id="highBelowPercent" name="highBelowPercent" type="number" inputmode="numeric" min="5" max="100" step="1" value="' + esc(Math.round(s.highBelow * 100)) + '">',
+        'On the donor wishlist, an item is High priority when usable stock is below this share of its target, and Medium up to the target.') +
+      '<button class="btn primary block" type="submit">Save settings</button></form>';
+    var lists = '<dl class="kv"><dt>Sources</dt><dd>' + esc(s.sources.join(', ')) + '</dd><dt>Purposes</dt><dd>' + esc(s.purposes.join(', ')) + '</dd>' +
+      '<dt>Categories</dt><dd>' + esc(s.categories.join(', ')) + '</dd><dt>Time zone</dt><dd>' + esc(res.timeZone) + '</dd></dl>' +
+      '<p class="hint" style="margin-top:8px">Edit these lists in the RQ_Settings tab of the sheet.</p>';
+    var tables = res.tables.map(function (t) {
+      return '<h3 style="font-size:15px;margin:12px 0 6px">' + esc(t.label) + ' · tab “' + esc(t.tab) + '”</h3><table class="map-table"><thead><tr><th>Field</th><th>Header</th><th>Status</th></tr></thead><tbody>' +
+        t.fields.map(function (f) {
+          var st = f.found ? '<span class="ok">Found</span>' : f.required ? '<span class="bad">Missing</span>' : 'Not in tab';
+          return '<tr><td>' + esc(f.key) + '</td><td>' + esc(f.header || '—') + '</td><td>' + st + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    }).join('');
+    var caps = res.capabilities;
+    var connection = '<div class="list" style="padding:4px 14px 12px">' + tables +
+      '<p class="hint" style="margin-top:10px">Expiry tracking is ' + (caps.expiry ? 'on' : 'off') + '. Choosing a batch is ' + (caps.batchIds ? 'on' : 'off') +
+      '. Header names come from the RQ_ColumnMap tab.</p></div>';
+    var links = '<dl class="kv"><dt>Access</dt><dd>' + (res.access === 'pin' ? 'Staff PIN (option C)' : 'Google sign-in (option A or B)') + '</dd>' +
+      '<dt>Staff app link</dt><dd>' + esc(res.staffAppUrl || 'Not set') + '</dd>' +
+      '<dt>Donor page link</dt><dd>' + esc(res.wishlistPageUrl || 'Not set') + '</dd>' +
+      '<dt>Wishlist published</dt><dd>' + esc(res.lastSync ? fmtStamp(res.lastSync) : (res.wishlistConfigured ? 'Not yet' : 'No public spreadsheet yet')) + '</dd>' +
+      '<dt>Version</dt><dd>' + esc(res.version) + '</dd></dl>';
+    var warnings = (res.warnings || []).map(function (w) { return callout('warn', w); }).join('');
+    shell({ tab: 'more', title: 'Settings', back: 'more', body: form + section('Lists', lists) + section('Sheet connection', connection) + section('Links and access', links) + warnings });
+
+    var f = document.getElementById('f-set');
+    f.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var v = formValues(f);
+      submit(f, 'saveSettings', { soonDays: v.soonDays, highBelowPercent: v.highBelowPercent }, function (out) {
+        S.boot.settings = out.settings;
+        invalidate();
+        toast(out.message);
+      });
+    });
+  }
+
+  VIEWS.settings = function (route, token) {
+    shell({ tab: 'more', title: 'Settings', back: 'more', body: skeleton(3) });
+    call('settings').then(function (res) {
+      if (isCurrent(token)) renderSettings(res);
+    }).catch(function (err) { if (isCurrent(token)) viewError(err); });
+  };
+
+  VIEWS.scan = function () {
+    var signIn = S.boot.pinRequired ? 'Enter the staff PIN if the app asks for it.' : 'If asked, sign in with the Google account KSK gave access to.';
+    var steps = [
+      'Open your phone’s camera app (or Google Lens).',
+      'Point it at the QR label on the shelf.',
+      'Tap the link that appears. The item opens here, ready for stock in or stock out.',
+      signIn
+    ];
+    var body = '<div class="callout" style="margin-top:14px">' + icon('scan') + '<div><p>Shelf labels work with your phone’s normal camera. You do not need to scan inside this app.</p></div></div>' +
+      section('Steps', '<ol class="steps">' + steps.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ol>') +
+      '<section class="block"><button class="btn secondary block" type="button" data-go="pick?for=in">Find the item by name instead</button></section>';
+    shell({ tab: 'more', title: 'Scan a shelf QR', back: 'more', body: body });
+  };
+
+  /* ================================================================== */
+  /* QR labels                                                           */
+  /* ================================================================== */
+
+  function loadQrLib() {
+    if (window.qrcode) return Promise.resolve(window.qrcode);
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = QR_LIB;
+      s.onload = function () { if (window.qrcode) resolve(window.qrcode); else reject(new Error('QR library missing')); };
+      s.onerror = function () { reject(new Error('Could not load the QR code library.')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function qrSvg(text) {
+    var q = window.qrcode(0, 'M');
+    q.addData(text);
+    q.make();
+    try { return q.createSvgTag({ cellSize: 4, margin: 0, scalable: true }); } catch (e) { return q.createSvgTag(4, 0); }
+  }
+
+  function renderLabels(res) {
+    var intro = '<div class="callout no-print" style="margin-top:14px">' + icon('info') + '<div><p>Stick each label on its shelf. A phone camera opens that item in the staff app. The donor QR opens the public wishlist.</p></div></div>';
+    if (!res.appUrl) intro += callout('warn', 'The staff app link is not known yet. Deploy the staff app, then paste its /exec link into staff_app_url in the RQ_Settings tab.', 'no-print');
+    var labels = [];
+    if (res.wishlistPageUrl) labels.push({ cls: 'donor', name: 'Donor wishlist', meta: 'Scan to see what we need most', url: res.wishlistPageUrl });
+    res.items.forEach(function (it) {
+      var url = res.appUrl ? res.appUrl + (res.appUrl.indexOf('?') >= 0 ? '&' : '?') + 'item=' + encodeURIComponent(it.id) : '';
+      labels.push({ cls: '', name: it.name, meta: it.id + (it.category ? ' · ' + it.category : ''), url: url });
+    });
+    var grid = '<div class="labels" id="labels">' + labels.map(function (l) {
+      return '<div class="label ' + l.cls + '" data-find="' + esc(normalize(l.name + ' ' + l.meta)) + '">' +
+        '<div class="qr" data-qr="' + esc(l.url) + '">' + (l.url ? '<span class="hint">Loading…</span>' : '<span class="hint">No link yet</span>') + '</div>' +
+        '<div class="lname">' + esc(l.name) + '</div><div class="lmeta">' + esc(l.meta) + '</div></div>';
+    }).join('') + '</div>';
+    var controls = '<div class="toolbar no-print">' + searchBox('lab-q', 'Filter labels') + '</div>' +
+      '<div class="btn-row no-print"><button class="btn primary" type="button" data-action="print">' + icon('print') + 'Print labels</button><span></span></div>';
+    shell({ tab: 'more', title: 'QR labels', back: 'more', body: intro + controls + grid });
+
+    document.getElementById('lab-q').addEventListener('input', function (e) {
+      var q = normalize(e.target.value);
+      Array.prototype.forEach.call(document.querySelectorAll('#labels .label'), function (el) {
+        el.hidden = !!q && el.getAttribute('data-find').indexOf(q) < 0;
+      });
+    });
+    var holders = Array.prototype.filter.call(document.querySelectorAll('#labels [data-qr]'), function (el) { return el.getAttribute('data-qr'); });
+    if (!holders.length) return;
+    loadQrLib().then(function () {
+      holders.forEach(function (el) { el.innerHTML = qrSvg(el.getAttribute('data-qr')); });
+    }).catch(function () {
+      holders.forEach(function (el) { el.innerHTML = '<span class="hint" style="word-break:break-all">' + esc(el.getAttribute('data-qr')) + '</span>'; });
+      toast('The QR code library could not load. Check the connection and open this page again.', 'error');
+    });
+  }
+
+  VIEWS.labels = function (route, token) {
+    shell({ tab: 'more', title: 'QR labels', back: 'more', body: skeleton(3) });
+    call('labels').then(function (res) {
+      if (isCurrent(token)) renderLabels(res);
+    }).catch(function (err) { if (isCurrent(token)) viewError(err); });
+  };
+
+  /* ================================================================== */
+  /* PIN (access option C) and start-up                                  */
+  /* ================================================================== */
+
+  function renderPin(message) {
+    app.innerHTML = '<div class="pin-screen"><form class="pin-card" id="f-pin" novalidate>' + brandBlock('Staff access') +
+      '<h1>Enter the staff PIN</h1>' +
+      '<div class="field"><label for="pin">PIN</label><input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="off"></div>' +
+      (message ? '<p class="error">' + esc(message) + '</p>' : '') +
+      '<button class="btn primary block" type="submit">Continue</button>' +
+      '<p class="hint">Ask the warehouse coordinator for the PIN. Never post it in a group chat.</p></form></div>';
+    var form = document.getElementById('f-pin');
+    form.elements.pin.focus();
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var pin = form.elements.pin.value.replace(/\s+/g, '');
+      if (!pin) return;
+      S.pin = pin;
+      setBusy(form.querySelector('[type=submit]'), true, 'Checking…');
+      call('bootstrap').then(function (b) {
+        rememberPin(pin);
+        S.boot = b;
+        S.dashAt = Date.now();
+        render();
+      }).catch(function (err) {
+        S.pin = '';
+        if (err.code === 'pin' || err.code === 'locked') renderPin(err.message);
+        else renderFatal(err);
+      });
+    });
+  }
+
+  function boot() {
+    call('access').then(function (acc) {
+      if (acc.pinRequired && !S.pin) { renderPin(''); return; }
+      return call('bootstrap').then(function (b) {
+        S.boot = b;
+        S.dashAt = Date.now();
+        render();
+      });
+    }).catch(function (err) {
+      if (!handleAuthError(err)) renderFatal(err);
+    });
+  }
+
+  function start() {
+    try { S.pin = sessionStorage.getItem(PIN_KEY) || ''; } catch (e) { S.pin = ''; }
+    var urlApi = window.google && google.script && google.script.url;
+    if (!urlApi) { boot(); return; }
+    // A shelf QR opens .../exec?item=RICE-01: jump straight to that item.
+    urlApi.getLocation(function (loc) {
+      var item = loc && loc.parameter && loc.parameter.item;
+      if (item && !location.hash) {
+        try { location.replace('#' + itemRoute(item)); } catch (e) { location.hash = itemRoute(item); }
+      }
+      boot();
+    });
+  }
+
+  start();
+})();
+</script>

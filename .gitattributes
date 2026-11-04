@@ -1,0 +1,2 @@
+# Same line endings for everyone (Windows and Mac), so diffs stay clean.
+* text=auto eol=lf

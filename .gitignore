@@ -1,0 +1,15 @@
+# clasp: script IDs and Google login. Never commit these (the repo is public).
+.clasp.json
+.clasprc.json
+**/.clasp.json
+
+node_modules/
+dist/
+.claude/
+*.log
+.DS_Store
+Thumbs.db
+
+# Real KSK data must never be in this repo
+*.xlsx
+*.csv
