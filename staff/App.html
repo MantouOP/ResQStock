@@ -369,14 +369,49 @@
     }).join('') + '</div></nav>';
   }
 
-  /** o = { tab, brand, title, back, actions, body } */
+  /** The desktop sidebar: same destinations as the tab bar, plus the two everyday actions. */
+  function sidenav(active) {
+    var b = S.boot || {};
+    var link = function (route, key, iconName, label) {
+      var on = key === active;
+      return '<button class="side-link' + (on ? ' active' : '') + '" type="button" data-go="' + route + '"' + (on ? ' aria-current="page"' : '') + '>' +
+        icon(iconName) + '<span>' + esc(label) + '</span></button>';
+    };
+    return '<aside class="sidenav" aria-label="Main">' + brandBlock('Managing supplies, nourishing lives') +
+      '<div class="side-actions">' +
+        '<button class="btn primary block" type="button" data-go="pick?for=in">' + icon('in') + 'Stock in</button>' +
+        '<button class="btn secondary block" type="button" data-go="pick?for=out">' + icon('out') + 'Stock out</button>' +
+      '</div>' +
+      '<nav class="side-nav">' +
+        link('', 'home', 'home', 'Home') +
+        link('inventory', 'inventory', 'box', 'Inventory') +
+        link('wishlist', 'wishlist', 'heart', 'Donor wishlist') +
+        '<span class="side-divider" role="separator"></span>' +
+        link('labels', 'labels', 'qr', 'QR labels') +
+        link('scan', 'scan', 'scan', 'Scan help') +
+        link('settings', 'settings', 'sliders', 'Settings') +
+        (b.wishlistPageUrl ? '<a class="side-link" href="' + esc(b.wishlistPageUrl) + '" target="_blank" rel="noopener">' + icon('external') + '<span>Public donor page</span></a>' : '') +
+      '</nav>' +
+      '<div class="side-foot"><span>' + esc(b.user ? 'Signed in as ' + b.user : 'Signed in') + '</span><span>Version ' + esc(b.version || '') + '</span>' +
+        (b.pinRequired ? '<button class="link" type="button" data-action="signout">Sign out</button>' : '') + '</div>' +
+    '</aside>';
+  }
+
+  /**
+   * o = { tab, nav, brand, title, back, top, actions, body }
+   * tab: bottom tab to highlight. nav: sidebar item to highlight (defaults to tab).
+   * top: a top-level page, so the desktop sidebar replaces its back button.
+   */
   function shell(o) {
-    var top = o.brand
-      ? '<header class="topbar">' + brandBlock('Managing supplies, nourishing lives') +
-        '<button class="icon-btn" type="button" data-go="settings" aria-label="Settings">' + icon('sliders') + '</button></header>'
-      : '<header class="topbar"><button class="icon-btn" type="button" data-back="' + esc(o.back || '') + '" aria-label="Back">' + icon('back') + '</button>' +
-        '<h1 class="title">' + esc(o.title || '') + '</h1>' + (o.actions || '') + '</header>';
-    app.innerHTML = '<div class="shell">' + top + '<main class="view" id="view">' + o.body + '</main>' + tabbar(o.tab) + '</div>';
+    var nav = o.nav === undefined ? o.tab : o.nav;
+    var inner = o.brand
+      ? brandBlock('Managing supplies, nourishing lives') + '<p class="title only-wide">Overview</p>' +
+        '<button class="icon-btn only-compact" type="button" data-go="settings" aria-label="Settings">' + icon('sliders') + '</button>'
+      : '<button class="icon-btn' + (o.top ? ' back-top' : '') + '" type="button" data-back="' + esc(o.back || '') + '" aria-label="Back">' + icon('back') + '</button>' +
+        '<h1 class="title">' + esc(o.title || '') + '</h1>' + (o.actions || '');
+    app.innerHTML = '<div class="shell">' + sidenav(nav) +
+      '<div class="frame"><header class="topbar"><div class="topbar-inner">' + inner + '</div></header>' +
+      '<main class="view" id="view">' + o.body + '</main></div>' + tabbar(o.tab) + '</div>';
   }
 
   var ACTIONS = {
@@ -417,20 +452,41 @@
   /* Shared pieces                                                       */
   /* ================================================================== */
 
+  /**
+   * One item. On a phone it is a card (the .m-only lines); in a wide page area
+   * the same button lays out as a table row (the .cell columns).
+   */
   function itemCard(it, route, disabled) {
-    var qty = it.stock > 0 ? 'Qty: ' + qtyText(it.stock, it.unit) : 'Out of stock';
-    var next = it.stock > 0 ? (it.nearestExpiry ? 'Next expiry: ' + fmtDay(it.nearestExpiry) : 'No expiry date') : '';
-    return '<button class="row-card" type="button" data-go="' + esc(route || itemRoute(it.id)) + '"' + (disabled ? ' disabled' : '') + '>' + thumb(it.category) +
+    var inStock = it.stock > 0;
+    var qty = inStock ? qtyText(it.stock, it.unit) : 'Out of stock';
+    var next = inStock ? (it.nearestExpiry ? fmtDay(it.nearestExpiry) : 'No expiry date') : '';
+    return '<button class="row-card item-row" type="button" data-go="' + esc(route || itemRoute(it.id)) + '"' + (disabled ? ' disabled' : '') + '>' + thumb(it.category) +
       '<span class="main"><span class="name">' + esc(it.name) + '</span>' +
-      '<span class="meta">' + esc([it.category, qty].filter(Boolean).join(' · ')) + '</span>' +
-      (next ? '<span class="meta">' + esc(next) + '</span>' : '') +
-      (it.unlisted ? '<span class="meta">Not in the item list yet</span>' : '') +
-      '</span><span class="side">' + badge(it.status) + '</span></button>';
+        '<span class="meta m-only">' + esc([it.category, inStock ? 'Qty: ' + qty : qty].filter(Boolean).join(' · ')) + '</span>' +
+        (next ? '<span class="meta m-only">' + esc(it.nearestExpiry ? 'Next expiry: ' + next : next) + '</span>' : '') +
+        (it.unlisted ? '<span class="meta">Not in the item list yet</span>' : '') +
+      '</span>' +
+      '<span class="cell">' + esc(it.category || '') + '</span>' +
+      '<span class="cell num">' + esc(qty) + (it.expiredQty > 0 ? '<span class="cell-sub">' + esc(qtyText(it.expiredQty, it.unit) + ' expired') + '</span>' : '') + '</span>' +
+      '<span class="cell num">' + esc(next) + '</span>' +
+      '<span class="side">' + badge(it.status) + '</span></button>';
+  }
+
+  function tableHead() {
+    return '<div class="table-head" aria-hidden="true"><span></span><span>Item</span><span>Category</span><span>In stock</span><span>Next expiry</span><span>Status</span></div>';
   }
 
   function itemLine(it) {
     var stock = 'In stock: ' + qtyText(it.stock, it.unit) + (it.expiredQty > 0 ? ' (' + qtyText(it.expiredQty, it.unit) + ' expired)' : '');
     return '<div class="item-line">' + thumb(it.category) + '<div><div class="name">' + esc(it.name) + '</div><div class="meta">' + esc(stock) + '</div></div></div>';
+  }
+
+  /** Shown beside the stock in / out form when the page is wide enough. */
+  function formAside(it) {
+    var batches = it.batches.length
+      ? '<div class="list">' + it.batches.map(function (b) { return batchRow(b, it.unit, b.key === it.suggestedBatch && it.batches.length > 1); }).join('') + '</div>'
+      : emptyLine('No stock on hand yet.');
+    return '<aside class="form-aside">' + section('Batches on hand', batches) + '</aside>';
   }
 
   function batchLabel(b, unit) {
@@ -456,6 +512,12 @@
       '<span class="side">' + badge(a.status) + '</span></button>';
   }
 
+  function needCard(n) {
+    return '<button class="row-card" type="button" data-go="' + esc(n.id ? itemRoute(n.id) : 'wishlist') + '">' + thumb(n.category) +
+      '<span class="main"><span class="name">' + esc(n.name) + '</span><span class="meta">Needed: ' + esc(n.needed) + '</span></span>' +
+      '<span class="side">' + priorityBadge(n.priority) + '</span></button>';
+  }
+
   function renderHome() {
     var d = S.boot.dashboard;
     var c = d.counts;
@@ -464,23 +526,32 @@
       statCard('Expiring soon', c.soonBatches, c.soonBatches === 1 ? 'batch' : 'batches', 'soon', 'inventory?status=soon') +
       statCard('Expired', c.expiredBatches, c.expiredBatches === 1 ? 'batch' : 'batches', 'expired', 'inventory?status=expired') +
       '</div>';
-    var hero = '<section class="hero"><h1 class="hello">' + esc(greeting()) + '</h1><p class="sub">Here’s your inventory overview for ' +
-      esc(fmtDay(S.boot.today)) + '.</p>' + stats + '</section>';
+    var hero = '<section class="hero"><div class="hero-text"><h1 class="hello">' + esc(greeting()) + '</h1><p class="sub">Here’s your inventory overview for ' +
+      esc(fmtDay(S.boot.today)) + '.</p></div>' + stats + '</section>';
     var alerts = d.alerts.length
       ? d.alerts.map(alertCard).join('')
       : emptyLine('Nothing is expiring in the next ' + S.boot.settings.soonDays + ' days.');
     var viewAll = d.totalAlerts ? '<button class="link" type="button" data-go="inventory?status=alerts">View all ' + d.totalAlerts + '</button>' : '';
+    var needs = d.needs || [];
+    var needsList = needs.length
+      ? '<div class="cards">' + needs.map(needCard).join('') + '</div>'
+      : emptyLine('No items are on the donor wishlist right now.');
+    var manage = '<button class="link" type="button" data-go="wishlist">' + (d.needsTotal > needs.length ? 'View all ' + d.needsTotal : 'Manage') + '</button>';
     var warnings = (d.warnings || []).slice(0, 3).map(function (w) { return callout('warn', w); }).join('');
-    var body = hero +
-      '<section class="block"><div class="section-head"><h2>Expiry alerts</h2>' + viewAll + '</div><div class="cards">' + alerts + '</div></section>' +
-      '<section class="block"><h2>Quick actions</h2><div class="actions">' +
-        tile('in', 'Stock in', 'pick?for=in', true) +
-        tile('out', 'Stock out', 'pick?for=out', true) +
-        tile('scan', 'Scan a shelf QR', 'scan') +
-        tile('box', 'Inventory', 'inventory') +
-        tile('heart', 'Donor wishlist', 'wishlist') +
-        tile('plus', 'Add item', 'add') +
-      '</div></section>' + warnings;
+    // Quick actions are only for the tab-bar layout: on desktop the sidebar already holds them.
+    var body = hero + '<div class="home-grid"><div>' +
+        '<section class="block"><div class="section-head"><h2>Expiry alerts</h2>' + viewAll + '</div><div class="cards">' + alerts + '</div></section>' +
+      '</div><div>' +
+        '<section class="block only-compact"><h2>Quick actions</h2><div class="actions">' +
+          tile('in', 'Stock in', 'pick?for=in', true) +
+          tile('out', 'Stock out', 'pick?for=out', true) +
+          tile('scan', 'Scan a shelf QR', 'scan') +
+          tile('box', 'Inventory', 'inventory') +
+          tile('heart', 'Donor wishlist', 'wishlist') +
+          tile('plus', 'Add item', 'add') +
+        '</div></section>' +
+        '<section class="block"><div class="section-head"><h2>Most needed by donors</h2>' + manage + '</div>' + needsList + '</section>' +
+      '</div></div>' + warnings;
     shell({ tab: 'home', brand: true, body: body });
   }
 
@@ -504,9 +575,11 @@
     var mode = route.query['for'] === 'out' ? 'out' : 'in';
     shell({
       tab: 'home',
+      nav: '',
       title: mode === 'out' ? 'Stock out: choose item' : 'Stock in: choose item',
       back: '',
-      body: '<div class="toolbar">' + searchBox('pick-q', 'Search items') + '</div><div class="cards" id="pick-list">' + skeleton(4) + '</div>'
+      top: true,
+      body: '<div class="toolbar">' + searchBox('pick-q', 'Search items') + '</div><div class="cards list-table" id="pick-list">' + skeleton(4) + '</div>'
     });
     loadInventory().then(function (inv) {
       if (!isCurrent(token)) return;
@@ -516,7 +589,7 @@
         var items = inv.items.filter(function (it) { return !q || normalize(it.name + ' ' + it.category + ' ' + it.id).indexOf(q) >= 0; });
         if (mode === 'out') items.sort(function (a, b) { return (b.stock > 0 ? 1 : 0) - (a.stock > 0 ? 1 : 0); });
         document.getElementById('pick-list').innerHTML = items.length
-          ? items.map(function (it) { return itemCard(it, mode + '/' + encodeURIComponent(it.id), mode === 'out' && !(it.stock > 0)); }).join('')
+          ? tableHead() + items.map(function (it) { return itemCard(it, mode + '/' + encodeURIComponent(it.id), mode === 'out' && !(it.stock > 0)); }).join('')
           : emptyLine(inv.items.length ? 'No items match.' : 'No items yet. Add one from Inventory.');
       };
       input.addEventListener('input', draw);
@@ -534,9 +607,10 @@
       tab: 'inventory',
       title: 'Inventory',
       back: '',
+      top: true,
       actions: '<button class="btn small primary" type="button" data-go="add">' + icon('plus') + 'Add item</button>',
       body: '<div class="toolbar">' + searchBox('inv-q', 'Search items', S.q) + '<div class="chips" id="inv-chips"></div></div>' +
-        '<p class="count-line" id="inv-count"></p><div class="cards" id="inv-list">' + skeleton(5) + '</div>'
+        '<p class="count-line" id="inv-count"></p><div class="cards list-table" id="inv-list">' + skeleton(5) + '</div>'
     });
     loadInventory().then(function (inv) {
       if (!isCurrent(token)) return;
@@ -574,7 +648,7 @@
         }
         document.getElementById('inv-count').textContent = items.length + (items.length === 1 ? ' item' : ' items');
         document.getElementById('inv-list').innerHTML = items.length
-          ? items.map(function (it) { return itemCard(it); }).join('')
+          ? tableHead() + items.map(function (it) { return itemCard(it); }).join('')
           : emptyLine(inv.items.length ? 'No items match.' : 'No items yet. Add your first item.');
       }
       chips.addEventListener('click', function (e) {
@@ -637,14 +711,18 @@
     var history = it.history.length
       ? '<div class="list">' + it.history.map(function (h) { return historyRow(h, it.unit); }).join('') + '</div>'
       : emptyLine('No movements recorded yet.');
+    // One source order everywhere (screen readers and keyboard follow it):
+    // a single column on a phone; summary and wishlist left, batches and history right when wide.
     shell({
       tab: 'inventory',
       title: it.name,
       back: 'inventory',
-      body: hero + buttons + notes +
-        section('Batches', batches, it.batches.length > 1 ? 'First expiry, first out: the top batch goes first.' : '') +
-        section('Donor wishlist', wish) +
-        section('Recent movements', history)
+      body: '<div class="item-layout">' +
+        '<div class="col col-a">' + hero + buttons + notes + '<div class="wish-block">' + section('Donor wishlist', wish) + '</div></div>' +
+        '<div class="col col-b"><div class="batches-block">' +
+          section('Batches', batches, it.batches.length > 1 ? 'First expiry, first out: the top batch goes first.' : '') + '</div>' +
+          '<div class="history-block">' + section('Recent movements', history) + '</div></div>' +
+      '</div>'
     });
   }
 
@@ -684,7 +762,7 @@
         sources.map(function (s, i) { return radio('source', s, i === 0); }).join('') + '</div></fieldset>' +
       field('received', 'Received on', '<input id="received" name="received" type="date" value="' + esc(today) + '" max="' + esc(today) + '">') +
       '<div class="form-actions"><button class="btn primary block" type="submit">Save stock in</button></div></form>';
-    shell({ tab: 'inventory', title: 'Stock in', back: itemRoute(it.id), body: body });
+    shell({ tab: 'inventory', title: 'Stock in', back: itemRoute(it.id), body: '<div class="form-layout">' + body + formAside(it) + '</div>' });
 
     var form = document.getElementById('f-in');
     wireStepper(form);
@@ -772,7 +850,7 @@
         '<p class="hint" id="purpose-hint"></p>' + errorSlot('purpose') + '</fieldset>' +
       batchField +
       '<div class="form-actions"><button class="btn primary block" type="submit">Save stock out</button></div></form>';
-    shell({ tab: 'inventory', title: 'Stock out', back: itemRoute(it.id), body: body });
+    shell({ tab: 'inventory', title: 'Stock out', back: itemRoute(it.id), body: '<div class="form-layout">' + body + formAside(it) + '</div>' });
 
     var form = document.getElementById('f-out');
     wireStepper(form);
@@ -862,16 +940,17 @@
     var status = res.wishlistConfigured
       ? (res.lastSync ? 'Last published ' + fmtStamp(res.lastSync) + '.' : 'Not published yet.')
       : 'There is no public wishlist spreadsheet yet. An admin can create one from the ResQStock menu in the sheet.';
-    var intro = '<div class="callout" style="margin-top:14px">' + icon('info') + '<div><p>Donors see only the item name, quantity needed, priority and last updated date. Nothing else from the sheet is public.</p>' +
+    var intro = '<div class="callout lead">' + icon('info') + '<div><p>Donors see only the item name, quantity needed, priority and last updated date. Nothing else from the sheet is public.</p>' +
       '<p class="hint">' + esc(status) + '</p></div></div>';
     var actions = '<div class="btn-row"><button class="btn primary" type="button" data-action="publish"' + (res.wishlistConfigured ? '' : ' disabled') + '>Publish now</button>' +
       (res.wishlistPageUrl ? '<a class="btn secondary" href="' + esc(res.wishlistPageUrl) + '" target="_blank" rel="noopener">' + icon('external') + 'Public page</a>' : '<span></span>') + '</div>';
-    var body = intro + actions +
-      '<section class="block"><h2 id="preview-title">What donors see now (' + res.preview.length + ')</h2><div id="preview">' + previewList(res.preview) + '</div></section>' +
-      '<section class="block"><h2>Items</h2><p class="hint" style="margin:-4px 0 6px">High priority below ' + Math.round(res.highBelow * 100) + '% of the target. Change this in Settings.</p>' +
-        '<div class="toolbar" style="top:60px">' + searchBox('wish-q', 'Search items', S.wishQ) + '<div class="chips" id="wish-chips"></div></div>' +
+    // On a phone the summary comes first; in a wide page it becomes a side panel beside the items.
+    var side = '<aside class="wish-side">' + intro + actions +
+      '<section class="block"><h2 id="preview-title">What donors see now (' + res.preview.length + ')</h2><div id="preview">' + previewList(res.preview) + '</div></section></aside>';
+    var main = '<section class="block wish-main"><h2>Items</h2><p class="hint" style="margin:-4px 0 6px">High priority below ' + Math.round(res.highBelow * 100) + '% of the target. Change this in Settings.</p>' +
+        '<div class="toolbar">' + searchBox('wish-q', 'Search items', S.wishQ) + '<div class="chips" id="wish-chips"></div></div>' +
         '<div class="cards" id="wish-list"></div></section>';
-    shell({ tab: 'wishlist', title: 'Donor wishlist', back: '', body: body });
+    shell({ tab: 'wishlist', title: 'Donor wishlist', back: '', top: true, body: '<div class="wish-layout">' + side + main + '</div>' });
 
     var rows = res.rows.slice();
     var input = document.getElementById('wish-q');
@@ -942,7 +1021,7 @@
   }
 
   VIEWS.wishlist = function (route, token) {
-    shell({ tab: 'wishlist', title: 'Donor wishlist', back: '', body: skeleton(4) });
+    shell({ tab: 'wishlist', title: 'Donor wishlist', back: '', top: true, body: skeleton(4) });
     call('wishlistAdmin').then(function (res) {
       if (isCurrent(token)) renderWishlist(res, route.query.id);
     }).catch(function (err) { if (isCurrent(token)) viewError(err); });
@@ -971,7 +1050,7 @@
       '<dt>Access</dt><dd>' + (b.pinRequired ? 'Staff PIN' : 'Google sign-in') + '</dd>' +
       '<dt>Version</dt><dd>' + esc(b.version) + '</dd></dl>' +
       (b.pinRequired ? '<button class="btn secondary block" type="button" data-action="signout" style="margin-top:14px">Sign out</button>' : '');
-    shell({ tab: 'more', title: 'More', back: '', body: '<section class="block"><div class="list menu-list">' + rows + '</div></section>' + section('About', about) });
+    shell({ tab: 'more', nav: '', title: 'More', back: '', top: true, body: '<div class="narrow"><section class="block"><div class="list menu-list">' + rows + '</div></section>' + section('About', about) + '</div>' });
   };
 
   function renderSettings(res) {
@@ -1002,7 +1081,11 @@
       '<dt>Wishlist published</dt><dd>' + esc(res.lastSync ? fmtStamp(res.lastSync) : (res.wishlistConfigured ? 'Not yet' : 'No public spreadsheet yet')) + '</dd>' +
       '<dt>Version</dt><dd>' + esc(res.version) + '</dd></dl>';
     var warnings = (res.warnings || []).map(function (w) { return callout('warn', w); }).join('');
-    shell({ tab: 'more', title: 'Settings', back: 'more', body: form + section('Lists', lists) + section('Sheet connection', connection) + section('Links and access', links) + warnings });
+    shell({
+      tab: 'more', nav: 'settings', title: 'Settings', back: 'more', top: true,
+      body: '<div class="settings-grid"><div>' + form + section('Lists', lists) + '</div><div>' +
+        section('Sheet connection', connection) + section('Links and access', links) + warnings + '</div></div>'
+    });
 
     var f = document.getElementById('f-set');
     f.addEventListener('submit', function (e) {
@@ -1017,7 +1100,7 @@
   }
 
   VIEWS.settings = function (route, token) {
-    shell({ tab: 'more', title: 'Settings', back: 'more', body: skeleton(3) });
+    shell({ tab: 'more', nav: 'settings', title: 'Settings', back: 'more', top: true, body: skeleton(3) });
     call('settings').then(function (res) {
       if (isCurrent(token)) renderSettings(res);
     }).catch(function (err) { if (isCurrent(token)) viewError(err); });
@@ -1034,7 +1117,7 @@
     var body = '<div class="callout" style="margin-top:14px">' + icon('scan') + '<div><p>Shelf labels work with your phone’s normal camera. You do not need to scan inside this app.</p></div></div>' +
       section('Steps', '<ol class="steps">' + steps.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ol>') +
       '<section class="block"><button class="btn secondary block" type="button" data-go="pick?for=in">Find the item by name instead</button></section>';
-    shell({ tab: 'more', title: 'Scan a shelf QR', back: 'more', body: body });
+    shell({ tab: 'more', nav: 'scan', title: 'Scan a shelf QR', back: 'more', top: true, body: '<div class="narrow">' + body + '</div>' });
   };
 
   /* ================================================================== */
@@ -1073,9 +1156,12 @@
         '<div class="qr" data-qr="' + esc(l.url) + '">' + (l.url ? '<span class="hint">Loading…</span>' : '<span class="hint">No link yet</span>') + '</div>' +
         '<div class="lname">' + esc(l.name) + '</div><div class="lmeta">' + esc(l.meta) + '</div></div>';
     }).join('') + '</div>';
-    var controls = '<div class="toolbar no-print">' + searchBox('lab-q', 'Filter labels') + '</div>' +
-      '<div class="btn-row no-print"><button class="btn primary" type="button" data-action="print">' + icon('print') + 'Print labels</button><span></span></div>';
-    shell({ tab: 'more', title: 'QR labels', back: 'more', body: intro + controls + grid });
+    var controls = '<div class="toolbar no-print">' + searchBox('lab-q', 'Filter labels') + '</div>';
+    shell({
+      tab: 'more', nav: 'labels', title: 'QR labels', back: 'more', top: true,
+      actions: '<button class="btn small primary" type="button" data-action="print">' + icon('print') + 'Print</button>',
+      body: intro + controls + grid
+    });
 
     document.getElementById('lab-q').addEventListener('input', function (e) {
       var q = normalize(e.target.value);
@@ -1094,7 +1180,7 @@
   }
 
   VIEWS.labels = function (route, token) {
-    shell({ tab: 'more', title: 'QR labels', back: 'more', body: skeleton(3) });
+    shell({ tab: 'more', nav: 'labels', title: 'QR labels', back: 'more', top: true, body: skeleton(3) });
     call('labels').then(function (res) {
       if (isCurrent(token)) renderLabels(res);
     }).catch(function (err) { if (isCurrent(token)) viewError(err); });

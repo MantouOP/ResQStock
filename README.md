@@ -3,8 +3,8 @@
 Expiry alerts and a live donor wishlist for **Kechara Soup Kitchen (KSK)**, built on top of KSK's existing Google Sheet.
 WIX2001 Thinking & Communication Skills SULAM project, Occurrence 10, Group 3.
 
-- **Staff app**: phone-first web app. Scan a shelf QR, record stock in and out, and see what is expiring.
-- **Donor wishlist**: a public page showing only item name, quantity needed, priority and last updated date.
+- **Staff app**: scan a shelf QR, record stock in and out, and see what is expiring. On phones it has a bottom tab bar. On a desktop (960px and wider) it has a sidebar, the inventory becomes a table, and pages use two columns.
+- **Donor wishlist**: a public page showing only item name, quantity needed, priority and last updated date. It works on phones, tablets and desktops.
 - **Stack**: Google Sheets, Google Apps Script, HTML, CSS and JavaScript. No server to host and nothing to pay for.
 
 ## Try it now, no Google account needed

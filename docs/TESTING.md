@@ -16,6 +16,16 @@
 | T10 | Stock in on a phone over mobile data in under 1 minute | **Test by hand** at KSK | Not run |
 | T11 | Header renamed, RQ_ColumnMap updated, app still works | Automated (`T11`), plus a one-tab log with a Type column | Passing |
 
+## Screen sizes
+
+The preview has been checked in Chromium at 320 × 640 (small phone), 375 × 812 (phone), 812 × 375 (phone held sideways), 768 × 1024 (tablet), 1280 × 800 (laptop) and 1680 × 900 (wide monitor), with no sideways scrolling at any of them. The layout rules:
+
+- **Below 960px:** bottom tab bar.
+- **960px and up:** sidebar.
+- **Each page** reflows based on its own width, so a resized window behaves like a tablet.
+
+Still check this on a real iPhone (Safari) and an Android phone.
+
 ## What the preview and the tests cannot prove
 
 They run the real server code, but against stand-ins for Google's services (`dev/gas-shim.js`). Check these on a real deployment:

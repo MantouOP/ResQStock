@@ -119,6 +119,15 @@ test('T6 and T7: wishlist settings reach the public app, four fields only', () =
   assert.equal(plain(loadApp('wishlist', drive, { user: '' }).getWishlist()).info.link, undefined);
 });
 
+test('the dashboard lists what donors are asked for most, High first', () => {
+  const { staff } = seeded();
+  const dash = ok(api(staff, 'dashboard')).dashboard;
+  assert.equal(dash.needs.length, 5);
+  assert.ok(dash.needsTotal >= dash.needs.length);
+  assert.equal(dash.needs[0].priority, 'High');
+  dash.needs.forEach((n) => assert.ok(n.id && n.name && n.needed, JSON.stringify(n)));
+});
+
 test('T8: with a PIN, wrong guesses are refused and then locked out', () => {
   const { staff } = seeded();
   staff.PropertiesService.getScriptProperties().setProperty('STAFF_PIN', '246810');

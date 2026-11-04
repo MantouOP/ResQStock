@@ -86,13 +86,25 @@ function apiBootstrap_() {
     wishlistPageUrl: state.settings.wishlistPageUrl,
     wishlistConfigured: !!props.getProperty(CONFIG.PROPS.wishlistId),
     pinRequired: !!props.getProperty(CONFIG.PROPS.pin),
-    dashboard: Logic.summarize(state.inventory, 5)
+    dashboard: dashboard_(state)
   };
 }
 
 function apiDashboard_() {
   var state = loadState_();
-  return { today: state.today, dashboard: Logic.summarize(state.inventory, 5) };
+  return { today: state.today, dashboard: dashboard_(state) };
+}
+
+/** Counts, expiry alerts and the items donors are asked for most. */
+function dashboard_(state) {
+  var dash = Logic.summarize(state.inventory, 5);
+  var needs = Logic.buildPublicWishlist(state.inventory.items, state.settings.highBelow, [], '');
+  dash.needsTotal = needs.length;
+  dash.needs = needs.slice(0, 5).map(function (r) {
+    var item = findItemByName_(state.inventory, r.name);
+    return { id: item ? item.id : '', name: r.name, needed: r.needed, priority: r.priority, category: item ? item.category : '' };
+  });
+  return dash;
 }
 
 function apiInventory_() {
