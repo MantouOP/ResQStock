@@ -19,7 +19,11 @@ Node.js 18 or newer is the only requirement, and there is nothing to install.
 
 ## Live demo (Vercel)
 
-A demo with sample data is deployed on Vercel from `main`, and every push redeploys it. It is the same preview as above, built into static files by `npm run build:demo` (see `vercel.json`).
+- **Staff app:** https://resqstock-gamma.vercel.app
+- **Donor page:** https://resqstock-gamma.vercel.app/wishlist
+- **A shelf QR link:** https://resqstock-gamma.vercel.app/?item=RICE-01
+
+The demo runs on sample data, and every push to `main` redeploys it. It is the same preview as above, built into static files by `npm run build:demo` (see `vercel.json`).
 
 - Each visitor gets their own sample data, saved only in their browser. Nothing goes to Google.
 - Every page shows a "Demo with sample data" note, so the donor page is not mistaken for a real appeal from KSK. The demo also asks search engines not to index it.
