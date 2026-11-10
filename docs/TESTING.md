@@ -55,8 +55,6 @@ They run the real server code, but against stand-ins for Google's services (`dev
 - Scanning a printed QR label with a phone camera.
 - Printing the QR labels from inside the Apps Script page. If the Print button does nothing, use the browser's own Print menu.
 
-## Bug log
-
 ## Stock imports
 
 `npm test` includes import-specific cases for CSV/TSV quoting and malformed data, English/Malay headings, strict quantities and date conventions, row limits, formula-like text, unit conflicts, access checks, all-row validation before writes, custom/shared logs, repeated content, lost responses, failed journal finalization, conflicting pending ranges, and bounded Google export redirects. Extraction tests cover PDF column reconstruction and bitmap cleanup after cancellation.
