@@ -1,6 +1,6 @@
 # Testing
 
-`npm test` runs 26 automated tests in about a second: `test/logic.test.js` for the business rules, and `test/api.test.js` for the server code end to end on fake spreadsheets. The IDs match the Testing section of the system plan.
+`npm test` runs 27 automated tests in about a second: `test/logic.test.js` for the business rules, and `test/api.test.js` for the server code end to end on fake spreadsheets. The IDs match the Testing section of the system plan.
 
 | ID | Scenario | How it is checked | Status |
 | --- | --- | --- | --- |

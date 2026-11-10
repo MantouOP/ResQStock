@@ -35,7 +35,7 @@ The demo runs on sample data, and every push to `main` redeploys it. It is the s
 npm test
 ```
 
-There are 26 tests covering the business rules and the plan's T1 to T11 scenarios. [docs/TESTING.md](docs/TESTING.md) shows which scenario each test covers and what still needs testing by hand.
+There are 27 tests covering the business rules and the plan's T1 to T11 scenarios. [docs/TESTING.md](docs/TESTING.md) shows which scenario each test covers and what still needs testing by hand.
 
 ## Folders
 
