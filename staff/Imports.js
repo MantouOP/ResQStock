@@ -34,8 +34,14 @@ function validateImport_(rows, state) {
     });
     if (!r.name) errors.name = 'Enter the item name.';
     if (!r.unit) errors.unit = 'Enter the unit (for example, tins or kg).';
-    if (!/^(?:\d+)(?:\.\d{1,3})?$/.test(String(r.qty)) || !(Number(r.qty) > 0 && Number(r.qty) <= 100000)) errors.qty = 'Use a quantity above 0, up to 100,000, with at most 3 decimal places.';
+    if (!/^(?:\d+)(?:\.\d{1,2})?$/.test(String(r.qty)) || !(Number(r.qty) > 0 && Number(r.qty) <= 100000)) errors.qty = 'Use a quantity above 0, up to 100,000, with at most 2 decimal places.';
     if (!/^\d{4}-\d{2}-\d{2}$/.test(r.received)) errors.received = 'Choose the received date.';
+    ['received', 'expiry'].forEach(function (field) {
+      if (!r[field]) return;
+      var parts = /^(\d{4})-(\d{2})-(\d{2})$/.exec(r[field]);
+      var stamp = parts ? new Date(Date.UTC(+parts[1], +parts[2] - 1, +parts[3])) : null;
+      if (!parts || +parts[1] < 1900 || +parts[1] > 2100 || stamp.getUTCFullYear() !== +parts[1] || stamp.getUTCMonth() + 1 !== +parts[2] || stamp.getUTCDate() !== +parts[3]) errors[field] = 'Use a real calendar date in YYYY-MM-DD format.';
+    });
     if (r.noExpiry && r.expiry) errors.expiry = 'Clear the expiry date or untick No expiry.';
     var key = Logic.normName(r.name), item = known[key], earlier = proposed[key];
     if (item && Logic.normName(r.unit) !== Logic.normName(item.unit)) errors.unit = 'This item uses ' + (item.unit || 'no unit') + '. Check the item or convert the quantity first.';

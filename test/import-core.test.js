@@ -50,7 +50,8 @@ test('headerless mapping preserves first item and does not invent a missing quan
 test('quantity conversion rejects prices, ambiguous comma decimals and nonfinite values', () => {
   for (const value of ['RM 12.50','12 pcs','1,5','Infinity','1e3','-2','0','100001']) assert.ok(core.parseQuantity(value).error, value);
   assert.equal(core.parseQuantity('1,234.5').value, 1234.5);
-  assert.equal(core.parseQuantity('0.125').value, 0.125);
+  assert.equal(core.parseQuantity('0.12').value, 0.12);
+  assert.ok(core.parseQuantity('0.001').error);
 });
 
 test('ambiguous dates require a choice and impossible dates never roll into another month', () => {

@@ -29,7 +29,7 @@ test('import preview is read-only; commit adds existing and hidden new items', (
   assert.equal(ok(api(ctx, 'item', { id: 'BEANS-01' })).item.stock, beansBefore + 3);
 });
 test('every row is validated before any item or stock write', () => {
-  for (const bad of [{ qty: 0 }, { qty: '1e2' }, { qty: 0.0001 }, { unit: 'kg' }, { name: '=IMPORTXML("x")' }, { source: '+SUM(A1)' }, { received: '2099-01-01' }, { expiry: '', noExpiry: false }]) {
+  for (const bad of [{ qty: 0 }, { qty: '1e2' }, { qty: 0.001 }, { qty: 0.0001 }, { unit: 'kg' }, { name: '=IMPORTXML("x")' }, { source: '+SUM(A1)' }, { received: '2099-01-01' }, { expiry: '', noExpiry: false }]) {
     const { ctx, ss, row, request } = fixture();
     request.rows = [{ ...row, name: 'Brand new item' }, { ...row, ...bad }];
     const before = ss.getSheetByName('Stock In').getLastRow();
@@ -48,6 +48,12 @@ test('conflicting new-item units and unreviewed or oversized imports are blocked
   const res = ok(api(ctx, 'previewImport', { rows: [{ ...row, name: 'New' }, { ...row, name: 'new', unit: 'bags' }] }));
   assert.equal(res.valid, false);
   assert.ok(res.rows[1].errors.unit);
+});
+test('calendar overflow and trailing text cannot become shifted import dates', () => {
+  const { ctx, request, row } = fixture();
+  for (const fields of [{ received: '2026-02-31' }, { noExpiry: false, expiry: '2027-02-30' }, { noExpiry: false, expiry: '2027-01-01 junk' }]) {
+    assert.equal(api(ctx, 'commitImport', { ...request, rows: [{ ...row, ...fields }] }).code, 'invalid');
+  }
 });
 test('access protection applies to preview, commit and Sheets reads', () => {
   const { ctx, request } = fixture();

@@ -61,7 +61,9 @@ They run the real server code, but against stand-ins for Google's services (`dev
 
 Synthetic files in `test/fixtures/` contain **Test rice: 4 bags** and **Test soap: 12 bars**, both with no expiry. The XLSX also has a second worksheet with **Test oats: 8 bags**. Use these to check CSV, workbook selection, text PDF, scanned PDF and JPEG workflows. For each file: verify the extracted values, correct any OCR mistakes, prepare review, import, and verify inventory quantities. Repeat the same content to verify the duplicate warning. Edit a checked row or its mapping and verify confirmation resets. Cancel a document read and navigate away to check cleanup.
 
-Browser checks for the new import flow are pending in the feature preview. Real Apps Script permission behavior, concurrent manual Sheet edits, quotas and physical iPad/iPhone Safari remain manual checks.
+Verified in the Vercel feature preview on 10 November 2026: CSV import creates Test rice at 4 bags and Test soap at 12 bars; XLSX worksheet selection produces Test oats at 8 bags; legacy XLS, text PDF, scanned PDF and JPEG all produce the expected review values. Re-importing the PDF after CSV raises a duplicate-content warning. Editing an acknowledged quantity disables saving. At viewport widths 320, 390, 820 and 1440, the review screen has no document overflow or out-of-bounds fields/buttons. The deployed public Sheets endpoint returns CSV from Google's official Sheets quickstart sample; browser testing on the protected preview encountered an expired preview authentication session, so repeat the browser link flow on the public production alias.
+
+The 59 automated tests additionally cover late image-decode cleanup, strict calendar dates, two-decimal stock precision and an older save response arriving after a newer pending request. Real Apps Script permission behavior, concurrent manual Sheet edits, quotas and physical iPad/iPhone Safari remain manual checks.
 
 ## Bug log
 

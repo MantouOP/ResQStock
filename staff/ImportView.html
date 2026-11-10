@@ -17,7 +17,14 @@ var StockImportView = (function () {
     function checked(value) { return value ? ' checked' : ''; }
     function included() { return model.rows.filter(function (r) { return r.include; }); }
     function resetReview() { model.checked = null; model.acknowledged = false; model.allowDuplicate = false; model.error = ''; }
-    function clearPending() { model.pending = null; try { sessionStorage.removeItem(storeKey); } catch (e) {} }
+    function clearPending() {
+      var id = model.pending && model.pending.id;
+      try {
+        var current = JSON.parse(sessionStorage.getItem(storeKey) || 'null');
+        if (current && current.id === id) sessionStorage.removeItem(storeKey);
+      } catch (e) { /* Do not erase a newer or unreadable retry record. */ }
+      model.pending = null;
+    }
     function sourcePanel() {
       var modes = [['file', 'Upload file'], ['sheets', 'Google Sheets'], ['paste', 'Paste cells']];
       var content = '<div class="import-tabs" role="group" aria-label="Import source">' + modes.map(function (m) { return '<button type="button" data-mode="' + m[0] + '" class="btn ' + (m[0] === model.mode ? 'primary' : 'secondary') + '" aria-pressed="' + (m[0] === model.mode) + '">' + m[1] + '</button>'; }).join('') + '</div>';
