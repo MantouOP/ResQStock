@@ -58,7 +58,8 @@ Donor phone --> donor QR --> Public wishlist app  --reads only-->  Public Wishli
 ```
 
 - **KSK's own tabs stay as they are.** ResQStock reads and writes them through the `RQ_ColumnMap` tab, so after the site visit only that tab changes, not the code. If KSK keeps stock in and stock out in one tab with a Type column, the column map handles that too.
-- **It adds three tabs:** `RQ_Items` (item list, target levels, wishlist switches), `RQ_Settings` (expiring-soon days, priority threshold, lists) and `RQ_ColumnMap`.
+- **It adds four tabs:** `RQ_Items` (item list, target levels, wishlist switches), `RQ_Settings` (expiring-soon days, priority threshold, lists), `RQ_ColumnMap`, and a hidden `RQ_Photos` (item photos).
+- **Item photos:** staff take or choose a photo on the item page and crop it to a square. It is saved as a small JPEG (about 10 KB) in `RQ_Photos`, inside KSK's sheet, so no Google Drive access is needed. Phones keep a copy, so each photo downloads once. Items without a photo show their category icon. Photos never appear on the public donor page.
 - **Every stock-in row is a batch** with its own expiry date. Stock goes out first expiry, first out. Expired stock is skipped for distribution and taken first for disposal.
 - **The two apps are separate Apps Script projects on purpose.** The browser can call any top-level server function, so the public project contains no code that can read the inventory.
 
@@ -111,7 +112,7 @@ These changes follow the system plan:
 - "Make a Donation" became "How to donate", which shows information only and has no form, so no donor data is collected.
 - Expiry dates belong to batches, not items. An item shows its earliest batch.
 - The "iventory" typo is gone.
-- Items use category icons instead of product photos.
+- Items can have a photo, cropped to a square on the phone. Items without one show a category icon.
 - Expired stock does not count as usable, so it raises the quantity needed on the wishlist.
 
 ## Decided at the site visit, not in code
@@ -123,5 +124,4 @@ These changes follow the system plan:
 ## Not built (by plan priority)
 
 - A daily email of expiring items (a "Could" feature).
-- Product photos (a "Won't" feature).
 - Camera scanning inside the app: the shelf QR opens with the phone's normal camera instead.

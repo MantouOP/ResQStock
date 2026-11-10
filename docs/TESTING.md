@@ -35,6 +35,7 @@ They run the real server code, but against stand-ins for Google's services (`dev
 - Speed and Apps Script quotas on KSK's full history.
 - Scanning a printed QR label with a phone camera.
 - Printing the QR labels from inside the Apps Script page. If the Print button does nothing, use the browser's own Print menu.
+- Item photos with a real phone: "Take photo" opening the camera, pinch-to-zoom in the cropper, and iPhone photos. The preview tested the cropper with a mouse, the slider and generated images; the server tests cover saving, replacing, removing and rejecting non-image files.
 
 ## Bug log
 

@@ -154,6 +154,32 @@
   .chev { color: #9aa8a1; }
   .thumb { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex: none; }
   .thumb .icon { width: 26px; height: 26px; }
+  .thumb.photo { background: var(--card); border: 1px solid var(--line); overflow: hidden; }
+  .thumb.photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  /* Item photo: the picture on the item page opens the photo screen */
+  .thumb-btn { position: relative; flex: none; border: 0; padding: 0; background: none; border-radius: 16px; }
+  .item-hero .thumb { width: 64px; height: 64px; border-radius: 16px; }
+  .item-hero .thumb .icon { width: 32px; height: 32px; }
+  .thumb-btn .cam { position: absolute; right: -5px; bottom: -5px; width: 26px; height: 26px; border-radius: 50%; background: var(--brand); color: #fff; border: 2px solid var(--card); display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(22, 79, 53, .25); }
+  .thumb-btn .cam .icon { width: 14px; height: 14px; }
+  .photo-page .item-line { width: min(100%, 360px); margin: 14px auto 0; }
+  .photo-frame { position: relative; width: min(100%, 360px); aspect-ratio: 1; margin: 16px auto 0; border-radius: 18px; overflow: hidden; background: var(--brand-tint); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--brand); }
+  .photo-frame > img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photo-frame > .icon { width: 72px; height: 72px; }
+  .photo-stage { background: #1b2420; border: 0; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .photo-stage.dragging { cursor: grabbing; }
+  .photo-stage .crop-img { position: absolute; left: 50%; top: 50%; max-width: none; transform-origin: center; will-change: transform; pointer-events: none; }
+  .photo-stage::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .9); pointer-events: none; }
+  .photo-stage:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+  .zoom-row { display: flex; align-items: center; gap: 10px; width: min(100%, 360px); margin: 12px auto 0; color: var(--muted); }
+  .zoom-row input[type=range] { flex: 1; min-width: 0; height: 44px; accent-color: var(--brand); }
+  .photo-actions { display: grid; gap: 10px; width: min(100%, 360px); margin: 16px auto 0; }
+  .file-btn { position: relative; cursor: pointer; }
+  .file-btn:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .hint.center, .link.center { text-align: center; justify-self: center; }
+  .photo-page .hint.center { max-width: 360px; margin: 10px auto 0; }
+  .danger-text { color: var(--exp-fg) !important; }
   .c0 { background: #e2f1e8; color: #1f6b47; } .c1 { background: #fdebd5; color: #9a4f0b; } .c2 { background: #e3ecf8; color: #2e5b93; }
   .c3 { background: #f6e1ea; color: #8f2f5a; } .c4 { background: #ece6f7; color: #5b3f97; } .c5 { background: #e7f1f1; color: #23676b; }
   .badge { display: inline-block; font-size: 12.5px; font-weight: 650; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }

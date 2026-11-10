@@ -161,6 +161,10 @@ function runSetup_(opts) {
   ensureSettingsTab_(ss, report);
   ensureColumnMapTab_(ss, report);
   ensureItemsTab_(ss, report);
+  if (!findSheet_(ss, CONFIG.TABS.photos)) {
+    photosSheet_(ss, true);
+    report.created.push('hidden tab "' + CONFIG.TABS.photos + '" (item photos)');
+  }
 
   var map = readColumnMap_(ss);
   checkTable_(ss, map.stockIn, opts, report);

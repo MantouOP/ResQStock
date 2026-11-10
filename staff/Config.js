@@ -12,8 +12,15 @@ var CONFIG = {
   TABS: {
     items: 'RQ_Items',
     settings: 'RQ_Settings',
-    columnMap: 'RQ_ColumnMap'
+    columnMap: 'RQ_ColumnMap',
+    photos: 'RQ_Photos'
   },
+
+  /**
+   * Item photos: one small square JPEG per item, stored as text in the hidden
+   * RQ_Photos tab. A Sheets cell holds at most 50,000 characters.
+   */
+  PHOTO: { headers: ['Item ID', 'Photo', 'Version'], maxChars: 48000 },
 
   /**
    * KSK's own stock tabs, with default tab and header names.
