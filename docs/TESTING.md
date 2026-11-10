@@ -57,4 +57,14 @@ They run the real server code, but against stand-ins for Google's services (`dev
 
 ## Bug log
 
+## Stock imports
+
+`npm test` includes import-specific cases for CSV/TSV quoting and malformed data, English/Malay headings, strict quantities and date conventions, row limits, formula-like text, unit conflicts, access checks, all-row validation before writes, custom/shared logs, repeated content, lost responses, failed journal finalization, conflicting pending ranges, and bounded Google export redirects. Extraction tests cover PDF column reconstruction and bitmap cleanup after cancellation.
+
+Synthetic files in `test/fixtures/` contain **Test rice: 4 bags** and **Test soap: 12 bars**, both with no expiry. The XLSX also has a second worksheet with **Test oats: 8 bags**. Use these to check CSV, workbook selection, text PDF, scanned PDF and JPEG workflows. For each file: verify the extracted values, correct any OCR mistakes, prepare review, import, and verify inventory quantities. Repeat the same content to verify the duplicate warning. Edit a checked row or its mapping and verify confirmation resets. Cancel a document read and navigate away to check cleanup.
+
+Browser checks for the new import flow are pending in the feature preview. Real Apps Script permission behavior, concurrent manual Sheet edits, quotas and physical iPad/iPhone Safari remain manual checks.
+
+## Bug log
+
 Najwa keeps the shared bug log with these columns: ID, steps, expected result, actual result, owner, status. Retest every fix, and run `npm test` before each KSK review.

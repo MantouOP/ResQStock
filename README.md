@@ -25,7 +25,7 @@ Node.js 18 or newer is the only requirement, and there is nothing to install.
 
 The demo runs on sample data, and every push to `main` redeploys it. It is the same preview as above, built into static files by `npm run build:demo` (see `vercel.json`).
 
-- Each visitor gets their own sample data, saved only in their browser. Nothing goes to Google.
+- Each visitor gets their own sample stock data, saved only in their browser. Importing a Google Sheets link requests that source from Google; demo stock changes never write back to it.
 - Every page shows a "Demo with sample data" note, so the donor page is not mistaken for a real appeal from KSK. The demo also asks search engines not to index it.
 - It is for showing the app. The real system runs on Google Apps Script, as [docs/SETUP.md](docs/SETUP.md) describes.
 
@@ -35,7 +35,19 @@ The demo runs on sample data, and every push to `main` redeploys it. It is the s
 npm test
 ```
 
-There are 26 tests covering the business rules and the plan's T1 to T11 scenarios. [docs/TESTING.md](docs/TESTING.md) shows which scenario each test covers and what still needs testing by hand.
+The tests cover business rules, T1 to T11 scenarios, import parsing, validation, duplicate protection, retry recovery and restricted public Sheets fetching. [docs/TESTING.md](docs/TESTING.md) records verification and remaining manual checks.
+
+## Import incoming stock
+
+Open **Inventory → Import stock**, or **More → Import stock** on a phone. Choose a file, paste spreadsheet cells, or enter a Google Sheets link. Match the headings, select the date order, correct each row, then check and confirm the included rows. Importing **adds incoming stock**, preserving existing counts and history; it never replaces the current stock count.
+
+- **Files:** CSV, TSV, XLSX, XLS, text PDFs, scanned PDFs, JPEG/JPG, PNG and WebP. Maximum 10 MB per file, 10 PDF pages and 200 stock rows; source worksheets are limited to 1,000 rows and 60 columns. Excel files can contain up to 20 worksheets.
+- **Google Sheets:** the Apps Script app reads sheets your signed-in Google account can access. The Vercel demo reads public worksheet links through `/api/sheets`. For private or unavailable sheets, export CSV/XLSX or paste selected cells; changing the sheet's sharing is unnecessary.
+- **PDF/photo reading:** pinned SheetJS, PDF.js and Tesseract readers download only when needed. File processing happens in the browser; original documents are not uploaded. OCR is intended for clear printed English text and is imperfect. Prices, totals, handwriting, complex layouts and rotated photos may need correction or pasted rows. Skipped lines remain visible for review.
+- **Units and expiry:** existing items keep their category and unit. A unit mismatch blocks the row; convert quantities explicitly before importing. Blank expiry cells need an explicit “No expiry date” choice when the stock log tracks expiry. New items start hidden from donors.
+- **Duplicates and retries:** repeated content and identical rows require confirmation for a separate delivery. A saved import reference is retained in the browser session during an uncertain save; **Check result / retry save** reuses it and cannot append the same import twice.
+
+Imports add a managed `RQ_Imports` journal tab on first save. Do not edit its cells. An administrator should reconcile a partial/conflicting import against the recorded destination range before proceeding. New item metadata may have been created before a failed stock write; retry reuses it. This is not a transaction across multiple sheets. The journal stops new imports at 2,000 entries; archive it only after reconciling every pending entry and retaining a backup, because removing history also removes duplicate detection for that history. Deploy the updated `staff` Apps Script bundle for real shared stock; the Vercel site remains a browser-local demo.
 
 ## Folders
 

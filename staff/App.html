@@ -347,9 +347,11 @@
   function isCurrent(token) { return token === renderToken; }
 
   var VIEWS = {};
+  var disposeView = null;
 
   function render() {
     if (!S.boot) return;
+    if (disposeView) { disposeView(); disposeView = null; }
     var route = parseRoute();
     var view = VIEWS[route.name] || VIEWS.home;
     var token = ++renderToken;
@@ -385,6 +387,7 @@
       '<nav class="side-nav">' +
         link('', 'home', 'home', 'Home') +
         link('inventory', 'inventory', 'box', 'Inventory') +
+        link('import', 'import', 'in', 'Import stock') +
         link('wishlist', 'wishlist', 'heart', 'Donor wishlist') +
         '<span class="side-divider" role="separator"></span>' +
         link('labels', 'labels', 'qr', 'QR labels') +
@@ -608,7 +611,7 @@
       title: 'Inventory',
       back: '',
       top: true,
-      actions: '<button class="btn small primary" type="button" data-go="add">' + icon('plus') + 'Add item</button>',
+      actions: '<div class="import-inventory-actions"><button class="btn small secondary" type="button" data-go="import">Import stock</button><button class="btn small primary" type="button" data-go="add">' + icon('plus') + 'Add item</button></div>',
       body: '<div class="toolbar">' + searchBox('inv-q', 'Search items', S.q) + '<div class="chips" id="inv-chips"></div></div>' +
         '<p class="count-line" id="inv-count"></p><div class="cards list-table" id="inv-list">' + skeleton(5) + '</div>'
     });
@@ -1039,7 +1042,8 @@
 
   VIEWS.more = function () {
     var b = S.boot;
-    var rows = menuRow('sliders', 'settings', 'Settings', 'Expiry window, wishlist priority, sheet connection') +
+    var rows = menuRow('in', 'import', 'Import stock', 'Spreadsheets, Google Sheets, PDFs and photos') +
+      menuRow('sliders', 'settings', 'Settings', 'Expiry window, wishlist priority, sheet connection') +
       menuRow('qr', 'labels', 'QR labels', 'Print shelf labels and the donor QR code') +
       menuRow('scan', 'scan', 'How to scan a shelf QR', 'Open an item with your phone camera');
     if (b.wishlistPageUrl) {
@@ -1051,6 +1055,10 @@
       '<dt>Version</dt><dd>' + esc(b.version) + '</dd></dl>' +
       (b.pinRequired ? '<button class="btn secondary block" type="button" data-action="signout" style="margin-top:14px">Sign out</button>' : '');
     shell({ tab: 'more', nav: '', title: 'More', back: '', top: true, body: '<div class="narrow"><section class="block"><div class="list menu-list">' + rows + '</div></section>' + section('About', about) + '</div>' });
+  };
+
+  VIEWS.import = function () {
+    disposeView = StockImportView.mount({ shell: shell, esc: esc, call: call, go: go, invalidate: invalidate, today: S.boot.today, demo: !!window.__RQ_PREVIEW__ });
   };
 
   function renderSettings(res) {

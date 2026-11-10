@@ -1,0 +1,178 @@
+<script>
+var StockImportView = (function () {
+  'use strict';
+  var LABELS = { name: 'Item name', qty: 'Quantity', unit: 'Unit', category: 'Category', expiry: 'Expiry date', received: 'Received date', source: 'Source', noExpiry: 'No expiry' };
+  function mount(ctx) {
+    var esc = ctx.esc, alive = true, operation = 0, controller = null;
+    var model = { mode: 'file', paste: '', url: '', source: '', sheets: [], selected: 0, matrix: null, rows: [], headerRow: -1, mapping: {}, dateOrder: 'auto', defaults: { received: ctx.today, source: 'Donation', noExpiry: false }, text: '', unmatched: [], checked: null, acknowledged: false, allowDuplicate: false, busy: '', error: '', pending: null, success: null };
+    var storeKey = 'rq-import-pending:' + location.pathname;
+    var mappingDirty = false;
+    try { var saved = sessionStorage.getItem(storeKey); if (saved) { var p = JSON.parse(saved); if (p && p.id && Array.isArray(p.rows) && p.rows.length <= 200) model.pending = p; } } catch (e) { /* in-memory retries still work */ }
+    ctx.shell({ tab: 'inventory', nav: 'import', title: 'Import stock', back: 'inventory', top: true, body: '<div id="stock-import"></div>' });
+    var root = document.getElementById('stock-import');
+    function button(action, label, style, disabled) { return '<button type="button" class="btn ' + (style || 'secondary') + '" data-import="' + action + '"' + (disabled ? ' disabled' : '') + '>' + label + '</button>'; }
+    function input(label, id, value, type, extra) { return '<div class="field"><label for="' + id + '">' + esc(label) + '</label><input id="' + id + '" type="' + (type || 'text') + '" value="' + esc(value) + '" ' + (extra || '') + '></div>'; }
+    function choices(options, selected) { return options.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(selected) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join(''); }
+    function select(label, id, options, value, extra) { return '<div class="field"><label for="' + id + '">' + esc(label) + '</label><select id="' + id + '" ' + (extra || '') + '>' + choices(options, value) + '</select></div>'; }
+    function checked(value) { return value ? ' checked' : ''; }
+    function included() { return model.rows.filter(function (r) { return r.include; }); }
+    function resetReview() { model.checked = null; model.acknowledged = false; model.allowDuplicate = false; model.error = ''; }
+    function clearPending() { model.pending = null; try { sessionStorage.removeItem(storeKey); } catch (e) {} }
+    function sourcePanel() {
+      var modes = [['file', 'Upload file'], ['sheets', 'Google Sheets'], ['paste', 'Paste cells']];
+      var content = '<div class="import-tabs" role="group" aria-label="Import source">' + modes.map(function (m) { return '<button type="button" data-mode="' + m[0] + '" class="btn ' + (m[0] === model.mode ? 'primary' : 'secondary') + '" aria-pressed="' + (m[0] === model.mode) + '">' + m[1] + '</button>'; }).join('') + '</div>';
+      if (model.mode === 'file') content += '<label class="import-drop" for="import-file"><span class="import-file-icon" aria-hidden="true">↑</span><strong>Choose a file or drop it here</strong><span>CSV, Excel, PDF or a photo</span><span class="hint">Up to 10 MB · 10 PDF pages · 200 stock rows</span><input id="import-file" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.pdf,.jpg,.jpeg,.png,.webp"></label>';
+      if (model.mode === 'sheets') content += input('Google Sheets link', 'import-url', model.url, 'url', 'placeholder="https://docs.google.com/spreadsheets/d/…"') + '<p class="hint">Copy the link with the worksheet you need selected. ' + (ctx.demo ? 'This demo can read public links. For a private sheet, upload an export or paste the cells.' : 'Your signed-in Google account must have access. Published links can be exported as CSV or pasted here.') + '</p>' + button('load-sheet', 'Read worksheet', 'primary');
+      if (model.mode === 'paste') content += '<div class="field"><label for="import-paste">Paste rows from a spreadsheet</label><textarea id="import-paste" rows="7" placeholder="Item&#9;Quantity&#9;Unit&#9;Expiry">' + esc(model.paste) + '</textarea><p class="hint">Include the column headings if you have them. CSV and tab-separated cells both work.</p></div>' + button('read-paste', 'Use pasted rows', 'primary');
+      return '<section class="import-panel"><div class="import-section-title"><span class="import-step">1</span><h2>Choose your source</h2></div>' + content + '<div class="import-small-actions">' + button('template', 'Download CSV template', 'link') + button('sample', 'Try sample rows', 'link') + '</div></section>';
+    }
+    function textPanel() {
+      return '<section class="import-panel"><h2>Check the extracted text</h2><p>Photo and PDF reading can miss words or confuse numbers. Correct the text below, then check every stock row.</p><div class="field"><label for="import-text">Extracted text</label><textarea id="import-text" rows="12">' + esc(model.text) + '</textarea></div><p class="hint">For reliable results, use one line per item: Item name,Quantity,Unit,Expiry. No prices or totals.</p>' + button('use-text', 'Find stock rows', 'primary') + '</section>';
+    }
+    function mapPanel() {
+      var matrix = model.matrix, cols = Math.max.apply(null, matrix.map(function (r) { return r.length; })), opts = [[-1, 'Not in this file']];
+      for (var c = 0; c < cols; c++) opts.push([c, 'Column ' + (c + 1) + ': ' + String((matrix[model.headerRow >= 0 ? model.headerRow : 0] || [])[c] || '').slice(0, 45)]);
+      var headers = [[-1, 'No headings — first row contains stock']];
+      for (var h = 0; h < Math.min(matrix.length, 10); h++) headers.push([h, 'Row ' + (h + 1) + ': ' + matrix[h].join(' · ').slice(0, 70)]);
+      var sheetSelect = model.sheets.length > 1 ? select('Worksheet', 'import-worksheet', model.sheets.map(function (s, i) { return [i, s.name]; }), model.selected) : '';
+      return '<section class="import-panel"><div class="import-section-title"><span class="import-step">2</span><h2>Match your columns</h2></div><p class="hint">' + esc(model.source) + ' · ' + matrix.length + ' source rows</p><details' + (model.rows.length ? '' : ' open') + '><summary>Column mapping and defaults</summary><div class="import-map-grid">' + sheetSelect + select('Heading row', 'import-header', headers, model.headerRow) + select('Dates in this file', 'import-date-order', [['auto', 'ISO / unambiguous dates'], ['dmy', 'Day / month / year'], ['mdy', 'Month / day / year']], model.dateOrder) + '</div><div class="import-map-grid">' + ImportCore.fields.map(function (field) { return select(LABELS[field], 'import-map-' + field, opts, model.mapping[field] === undefined ? -1 : model.mapping[field], 'data-map="' + field + '"'); }).join('') + '</div><h3>Defaults for empty cells</h3><div class="import-map-grid">' + input('Received date', 'import-default-received', model.defaults.received, 'date', 'data-default="received" max="' + ctx.today + '"') + input('Source', 'import-default-source', model.defaults.source, 'text', 'data-default="source" maxlength="200"') + input('Unit', 'import-default-unit', model.defaults.unit || '', 'text', 'data-default="unit" maxlength="40"') + input('Category', 'import-default-category', model.defaults.category || '', 'text', 'data-default="category" maxlength="80"') + '</div><label class="check"><input type="checkbox" data-default="noExpiry"' + checked(model.defaults.noExpiry) + '>Items with blank expiry cells have no expiry date</label><p class="hint">Remapping replaces edits to the rows below.</p>' + button('map', model.rows.length ? 'Remap rows' : 'Prepare review', 'primary') + '<details class="import-source-preview"><summary>Show source rows</summary><div class="import-table-scroll" tabindex="0" aria-label="First four source rows"><table><tbody>' + matrix.slice(0, 4).map(function (r) { return '<tr>' + r.map(function (v) { return '<td>' + esc(v) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div></details></details></section>';
+    }
+    function rowCard(row, index) {
+      var errors = row.errors || {};
+      function field(key) {
+        var id = 'ir-' + index + '-' + key;
+        return '<div class="field import-cell-' + key + '"><label for="' + id + '">' + LABELS[key] + '</label><input id="' + id + '" type="text" data-row="' + index + '" data-field="' + key + '" value="' + esc(row[key]) + '"' + (key === 'qty' ? ' inputmode="decimal"' : '') + (key === 'expiry' && row.noExpiry ? ' disabled' : '') + (errors[key] ? ' aria-invalid="true" aria-describedby="' + id + '-error"' : '') + ((key === 'received' || key === 'expiry') ? ' placeholder="YYYY-MM-DD"' : '') + '><span class="error" id="' + id + '-error">' + esc(errors[key] || '') + '</span></div>';
+      }
+      return '<article class="import-row' + (row.include ? '' : ' excluded') + '"><div class="import-row-head"><label class="check"><input type="checkbox" data-row="' + index + '" data-field="include"' + checked(row.include) + '>Include row ' + (index + 1) + '</label><span class="hint">Source row ' + row.sourceRow + (row.match ? ' · ' + (row.match === 'new' ? 'New item' : 'Existing item') : '') + '</span></div><div class="import-row-fields">' + ['name', 'qty', 'unit', 'category', 'expiry', 'received', 'source'].map(field).join('') + '<label class="check import-expiry-check"><input type="checkbox" data-row="' + index + '" data-field="noExpiry"' + checked(row.noExpiry) + '>No expiry date</label></div></article>';
+    }
+    function reviewControls() {
+      var count = included().length, valid = !mappingDirty && model.checked && model.checked.valid && count, warnings = model.checked ? model.checked.warnings : [];
+      return '<div class="import-review-summary"><strong>' + count + ' of ' + model.rows.length + ' rows included</strong><span class="hint">' + (mappingDirty ? 'Source options changed. Remap the rows before reviewing.' : model.checked ? (valid ? 'Rows checked. Ready for your review.' : 'Correct the highlighted fields, then check again.') : 'Check rows after making changes.') + '</span>' + button('check', 'Check rows', 'secondary', !count || mappingDirty || !!model.busy) + '</div>' + (warnings.length ? '<div class="callout warn"><div><strong>Possible duplicate stock</strong><ul>' + warnings.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') + '</ul><label class="check"><input id="import-duplicate" type="checkbox"' + checked(model.allowDuplicate) + '>I confirm these are separate deliveries.</label></div></div>' : '') + '<label class="check import-confirm"><input id="import-reviewed" type="checkbox"' + checked(model.acknowledged) + (!valid ? ' disabled' : '') + '>I checked the item names, units, quantities and dates against the source.</label>' + button('commit', 'Import ' + count + ' stock ' + (count === 1 ? 'row' : 'rows'), 'primary', !valid || !model.acknowledged || (warnings.length && !model.allowDuplicate) || !!model.busy) + '<p class="hint">Adds incoming stock. New items start hidden from the donor wishlist.</p>';
+    }
+    function render() {
+      if (!alive) return;
+      if (model.success) {
+        root.innerHTML = '<section class="import-panel import-success"><span class="import-success-mark" aria-hidden="true">✓</span><h2>Stock imported</h2><p>' + esc(model.success.message) + '</p><p>' + model.success.newItems + ' new items created. Existing stock history is preserved.</p><p class="hint">Import reference: ' + esc(model.success.id) + '</p><div class="btn-row">' + button('inventory', 'View inventory', 'primary') + button('another', 'Import another file') + '</div></section>'; return;
+      }
+      if (model.pending) {
+        root.innerHTML = '<section class="import-panel"><h2>' + (model.busy ? 'Saving incoming stock…' : 'Check this import’s result') + '</h2><p>' + model.pending.rows.length + ' rows · Reference: ' + esc(model.pending.id) + '</p><p>' + (model.busy ? 'Keep this page open while the stock is saved.' : 'Retry uses the same import reference. Rows that were already saved will not be added again.') + '</p><div role="alert" class="error">' + esc(model.error) + '</div>' + button('retry-save', 'Check result / retry save', 'primary', !!model.busy) + '</section>'; return;
+      }
+      root.innerHTML = '<div class="import-intro"><div><p class="eyebrow">INCOMING SUPPLIES</p><h2>From your list to your stockroom.</h2><p>Bring in a spreadsheet, delivery note or photo. Review the rows before adding stock.</p></div><div class="import-steps" aria-label="Import steps"><span>1 · Choose</span><span>2 · Match</span><span>3 · Review</span></div></div>' +
+        '<div id="import-feedback" role="status" aria-live="polite">' + (model.busy ? '<div class="import-progress"><span class="spinner" aria-hidden="true"></span><span id="import-progress-text">' + esc(model.busy) + '</span>' + button('cancel', 'Cancel', 'secondary small') + '</div>' : '') + '</div><p id="import-error" class="error" role="alert">' + esc(model.error) + '</p>' +
+        '<fieldset class="import-workspace"' + (model.busy ? ' disabled' : '') + '><legend class="sr-only">Stock import</legend><div class="import-main">' + sourcePanel() + (model.text ? textPanel() : '') + (model.matrix ? mapPanel() : '') + '</div><aside class="import-help"><h3>A quick check saves a recount.</h3><p>Use the quantity received, with the same unit already used in your inventory.</p><p>Dates should describe the delivery and expiry. Choose a date order if your file uses day/month or month/day.</p><p>For photos, use a clear, upright image of printed text. Always check the extracted numbers.</p><p class="hint">PDFs and photos are processed in this browser. The readers download when needed.</p></aside></fieldset>' +
+        (model.unmatched.length ? '<div class="callout warn"><div><strong>' + model.unmatched.length + ' lines were not converted to stock rows.</strong><p>Check these against your source and add any missing items.</p><details><summary>Show skipped text</summary><pre class="import-unmatched">' + esc(model.unmatched.join('\n')) + '</pre></details></div></div>' : '') +
+        (model.rows.length ? '<section class="import-review"><div class="import-section-title"><span class="import-step">3</span><h2>Review incoming stock</h2></div><p>Correct any mistakes and exclude rows you don’t want to import. Existing items keep their inventory category and unit.</p><fieldset class="import-row-list"' + (model.busy ? ' disabled' : '') + '><legend class="sr-only">Imported rows</legend>' + model.rows.map(rowCard).join('') + '</fieldset><div id="import-controls" class="import-panel">' + reviewControls() + '</div></section>' : '');
+    }
+    function updateControls() { var el = root.querySelector('#import-controls'); if (el) el.innerHTML = reviewControls(); }
+    function setError(error) { model.error = error.message || String(error); model.busy = ''; render(); }
+    function acceptMatrix(matrix, name) {
+      if (!matrix.length || !matrix.some(function (r) { return r.some(function (v) { return String(v).trim(); }); })) throw new Error('No rows were found. Choose another source or paste the stock list.');
+      model.matrix = matrix; model.source = name; model.rows = []; mappingDirty = false;
+      var detected = ImportCore.detectHeader(matrix); model.headerRow = detected.headerRow; model.mapping = detected.mapping; resetReview(); render();
+    }
+    async function runRead(fn) {
+      var token = ++operation; controller = new AbortController(); model.busy = 'Reading source…'; model.error = ''; render();
+      try {
+        var result = await fn(controller.signal, function (message) { if (alive && token === operation) { var el = root.querySelector('#import-progress-text'); if (el) el.textContent = message; } });
+        if (!alive || token !== operation) return;
+        model.busy = ''; model.rows = []; model.matrix = null; model.unmatched = []; model.text = ''; resetReview();
+        if (result.sheets) { model.sheets = result.sheets; model.selected = 0; acceptMatrix(result.sheets[0].matrix, result.name || result.sheets[0].name); }
+        else { model.source = result.name || 'Document'; model.text = result.text || ''; if (!model.text.trim()) throw new Error('No printed text was found. Try a clearer photo or paste the rows.'); render(); }
+      } catch (error) { if (alive && token === operation) { model.busy = ''; if (error.name !== 'AbortError') setError(error); else render(); } }
+      finally { if (token === operation) controller = null; }
+    }
+    async function checkRows() {
+      var rows = included(); if (!rows.length || mappingDirty || model.busy) return;
+      resetReview(); model.busy = 'Checking rows…'; render(); var token = ++operation;
+      try {
+        var result = await ctx.call('previewImport', { rows: rows, source: model.source });
+        if (!alive || token !== operation) return;
+        result.rows.forEach(function (r, i) { rows[i].errors = r.errors; rows[i].match = r.match; if (!Object.keys(r.errors).length) { rows[i].name = r.name; rows[i].unit = r.unit; rows[i].category = r.category; } });
+        model.checked = result; model.busy = ''; render();
+      } catch (error) { if (alive && token === operation) setError(error); }
+    }
+    async function save() {
+      if (model.busy) return;
+      if (!model.pending) {
+        if (mappingDirty || !model.checked || !model.checked.valid || !model.acknowledged || (model.checked.warnings.length && !model.allowDuplicate)) return;
+        model.pending = { id: 'import-' + (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)), rows: included().map(function (r) { var out = {}; ImportCore.fields.forEach(function (k) { out[k] = r[k]; }); return out; }), reviewed: true, allowDuplicate: model.allowDuplicate, source: model.source };
+        try { sessionStorage.setItem(storeKey, JSON.stringify(model.pending)); } catch (e) { /* request is retained in memory */ }
+      }
+      model.busy = 'Saving…'; model.error = ''; render();
+      try {
+        var result = await ctx.call('commitImport', model.pending);
+        // Clear the durable browser retry even if the user navigated during the call.
+        clearPending(); ctx.invalidate(); model.success = result; model.busy = ''; if (alive) render();
+      } catch (error) {
+        model.busy = ''; model.error = error.message || 'The result could not be confirmed. Retry with this reference.';
+        if (error.code === 'invalid' || error.code === 'duplicate') { clearPending(); resetReview(); model.error = error.message; }
+        if (alive) render();
+      }
+    }
+    function loadFile(file) { if (file) runRead(async function (signal, progress) { var result = await ImportFiles.read(file, { signal: signal, progress: progress }); result.name = file.name; return result; }); }
+    root.addEventListener('input', function (event) {
+      var el = event.target;
+      if (el.id === 'import-paste') model.paste = el.value;
+      if (el.id === 'import-url') model.url = el.value;
+      if (el.id === 'import-text') model.text = el.value;
+      if (['import-paste', 'import-url', 'import-text'].indexOf(el.id) >= 0) { resetReview(); updateControls(); }
+      if (el.dataset.row !== undefined && el.type !== 'checkbox') {
+        var row = model.rows[+el.dataset.row]; row[el.dataset.field] = el.value; delete row.errors[el.dataset.field]; resetReview(); updateControls();
+        el.removeAttribute('aria-invalid'); var error = root.querySelector('#' + el.id + '-error'); if (error) error.textContent = '';
+      }
+      if (el.dataset.default && el.type !== 'checkbox') { model.defaults[el.dataset.default] = el.value; mappingDirty = true; resetReview(); updateControls(); }
+    });
+    root.addEventListener('change', function (event) {
+      var el = event.target;
+      if (el.id === 'import-file') { loadFile(el.files[0]); return; }
+      if (el.id === 'import-reviewed') { model.acknowledged = el.checked; updateControls(); return; }
+      if (el.id === 'import-duplicate') { model.allowDuplicate = el.checked; model.acknowledged = false; updateControls(); return; }
+      if (el.dataset.row !== undefined && el.type === 'checkbox') { var row = model.rows[+el.dataset.row]; row[el.dataset.field] = el.checked; if (el.dataset.field === 'noExpiry' && el.checked) { row.expiry = ''; delete row.errors.expiry; } resetReview(); render(); return; }
+      if (el.id === 'import-worksheet') { model.selected = +el.value; acceptMatrix(model.sheets[model.selected].matrix, model.sheets[model.selected].name); return; }
+      if (el.id === 'import-header') { model.headerRow = +el.value; model.mapping = model.headerRow >= 0 ? ImportCore.mappingFor(model.matrix[model.headerRow]) : { name: 0, qty: 1, unit: 2, expiry: 3 }; mappingDirty = true; resetReview(); render(); return; }
+      if (el.id === 'import-date-order') model.dateOrder = el.value;
+      if (el.dataset.map) model.mapping[el.dataset.map] = +el.value;
+      if (el.dataset.default && el.type === 'checkbox') model.defaults[el.dataset.default] = el.checked;
+      if (el.dataset.map || el.dataset.default || el.id === 'import-date-order') { mappingDirty = true; resetReview(); updateControls(); }
+    });
+    root.addEventListener('click', function (event) {
+      var mode = event.target.closest('[data-mode]'), btn = event.target.closest('[data-import]');
+      if (mode && !model.busy) { model.mode = mode.dataset.mode; resetReview(); render(); return; }
+      if (!btn || btn.disabled) return;
+      var action = btn.dataset.import;
+      if (action === 'cancel') { ++operation; if (controller) controller.abort(); controller = null; model.busy = ''; render(); return; }
+      if (model.busy) return;
+      try {
+        if (action === 'read-paste') { model.sheets = []; model.text = ''; model.unmatched = []; acceptMatrix(ImportCore.parseDelimited(model.paste), 'Pasted cells'); }
+        if (action === 'load-sheet') runRead(async function (signal) {
+          var parsed = ImportCore.parseSheetUrl(model.url), result;
+          if (ctx.demo) {
+            var response = await fetch('/api/sheets?id=' + encodeURIComponent(parsed.id) + '&gid=' + parsed.gid + (parsed.published ? '&published=1' : ''), { signal: signal });
+            if (!response.ok) { var error = await response.json(); throw new Error(error.error || 'Could not read this worksheet. Export or paste the cells.'); }
+            result = { name: 'Google Sheets', matrix: ImportCore.parseDelimited(await response.text()) };
+          } else { if (parsed.published) throw new Error('For published links, export the CSV or paste the cells. You can also use the original sheet link.'); result = await ctx.call('readImportSheet', parsed); }
+          return { sheets: [result] };
+        });
+        if (action === 'template') {
+          var csv = ImportCore.toCsv([['Item', 'Quantity', 'Unit', 'Category', 'Expiry', 'Received', 'Source', 'No expiry']]);
+          var url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); var link = document.createElement('a'); link.href = url; link.download = 'ResQStock-import-template.csv'; link.click(); setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        }
+        if (action === 'sample') { model.sheets = []; model.text = ''; model.unmatched = []; acceptMatrix([['Item', 'Quantity', 'Unit', 'Category', 'Expiry', 'Received', 'Source'], ['Canned baked beans', '6', 'tins', 'Canned food', 'No expiry', ctx.today, 'Donation'], ['Sample lentils', '4', 'bags', 'Dry food', 'No expiry', ctx.today, 'Donation']], 'Sample stock rows'); }
+        if (action === 'use-text') { var extracted = ImportCore.documentRows(model.text); model.sheets = []; model.unmatched = extracted.unmatched; acceptMatrix(extracted.matrix, model.source); }
+        if (action === 'map') { model.rows = ImportCore.mapRows(model.matrix, { headerRow: model.headerRow, mapping: model.mapping, dateOrder: model.dateOrder, defaults: model.defaults }); if (!model.rows.length) throw new Error('No stock rows remain below the heading. Check the heading row.'); mappingDirty = false; checkRows(); }
+        if (action === 'check') checkRows();
+        if (action === 'commit' || action === 'retry-save') save();
+        if (action === 'inventory') ctx.go('inventory');
+        if (action === 'another') ctx.go('import');
+      } catch (error) { setError(error); }
+    });
+    root.addEventListener('dragover', function (event) { if (event.target.closest('.import-drop') && !model.busy) event.preventDefault(); });
+    root.addEventListener('drop', function (event) { if (event.target.closest('.import-drop') && !model.busy) { event.preventDefault(); if (event.dataTransfer.files.length !== 1) setError(new Error('Choose one file at a time.')); else loadFile(event.dataTransfer.files[0]); } });
+    function beforeUnload(event) { if (model.pending || (model.rows.length && !model.success)) { event.preventDefault(); event.returnValue = ''; } }
+    window.addEventListener('beforeunload', beforeUnload);
+    render();
+    return function () { alive = false; ++operation; if (controller) controller.abort(); controller = null; window.removeEventListener('beforeunload', beforeUnload); model.matrix = null; model.sheets = []; model.text = ''; };
+  }
+  return { mount: mount };
+})();
+</script>

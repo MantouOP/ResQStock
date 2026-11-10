@@ -1,0 +1,125 @@
+<script>
+/* Lazy, browser-only extraction. Original documents are never uploaded. */
+var ImportFiles = (function () {
+  'use strict';
+  var scripts = {}, PDF_BASE = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/';
+  var XLSX_URL = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+  function canceled() { return new DOMException('Reading canceled.', 'AbortError'); }
+  function script(url) {
+    if (!scripts[url]) scripts[url] = new Promise(function (resolve, reject) {
+      var el = document.createElement('script'); el.src = url; el.async = true;
+      el.onload = resolve; el.onerror = function () { delete scripts[url]; el.remove(); reject(new Error('Could not load the file reader. Check your connection and try again.')); };
+      document.head.appendChild(el);
+    });
+    return scripts[url];
+  }
+  function pdfText(items) {
+    var lines = [];
+    items.filter(function (it) { return it.str && it.str.trim(); }).forEach(function (it) {
+      var y = it.transform[5], x = it.transform[4], h = Math.abs(it.height || it.transform[3] || 10);
+      var line = lines.filter(function (line) { return Math.abs(line.y - y) < Math.max(2, h * 0.35); })[0];
+      if (!line) { line = { y: y, cells: [] }; lines.push(line); }
+      line.cells.push({ text: it.str, x: x, end: x + it.width, h: h });
+    });
+    return lines.sort(function (a, b) { return b.y - a.y; }).map(function (line) {
+      var cells = line.cells.sort(function (a, b) { return a.x - b.x; });
+      return cells.map(function (cell, i) { return (i ? (cell.x - cells[i - 1].end > Math.max(10, cell.h) ? '\t' : ' ') : '') + cell.text; }).join('');
+    }).join('\n');
+  }
+  async function read(file, options) {
+    options = options || {};
+    if (!file || file.size === 0) throw new Error('Choose a non-empty file.');
+    if (file.size > 10 * 1024 * 1024) throw new Error('Use a file smaller than 10 MB.');
+    var ext = file.name.split('.').pop().toLowerCase();
+    if (['csv', 'tsv', 'txt', 'xlsx', 'xls', 'pdf', 'jpg', 'jpeg', 'png', 'webp'].indexOf(ext) < 0) throw new Error('Choose CSV, TSV, XLSX, XLS, PDF, JPEG, PNG or WebP.');
+    var signal = options.signal, worker = null, pdf = null, task = null, canvas = null, bitmap = null, sheetWorker = null, blobUrl = '', stopped = false;
+    var progress = options.progress || function () {};
+    function check() { if (stopped || (signal && signal.aborted)) throw canceled(); }
+    function release() {
+      if (worker) { worker.terminate().catch(function () {}); worker = null; }
+      if (sheetWorker) { sheetWorker.terminate(); sheetWorker = null; }
+      if (task) { task.destroy().catch(function () {}); task = null; }
+      if (bitmap) { bitmap.close(); bitmap = null; }
+      if (canvas) { canvas.width = 0; canvas.height = 0; canvas = null; }
+      if (blobUrl) { URL.revokeObjectURL(blobUrl); blobUrl = ''; }
+    }
+    var abortReject;
+    var abortPromise = new Promise(function (_, reject) { abortReject = reject; });
+    function abort() { stopped = true; release(); abortReject(canceled()); }
+    if (signal) signal.addEventListener('abort', abort, { once: true });
+    var deadline = setTimeout(function () { stopped = true; release(); abortReject(new Error('Reading took too long. Try a smaller file or paste the rows.')); }, 180000);
+    async function recognize(image) {
+      check(); progress('Loading photo reader…');
+      await script('https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js'); check();
+      if (!worker) {
+        var created = await Tesseract.createWorker('eng', 1, {
+          workerPath: 'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/worker.min.js',
+          corePath: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0',
+          logger: function (m) { if (!stopped) progress(m.status === 'recognizing text' ? 'Reading text… ' + Math.round((m.progress || 0) * 100) + '%' : 'Preparing photo reader…'); }
+        });
+        if (stopped) { await created.terminate(); throw canceled(); }
+        worker = created;
+      }
+      var result = await worker.recognize(image); check();
+      return result.data.text;
+    }
+    function sizedCanvas(width, height, scale) {
+      scale = Math.min(scale || 1, 2400 / Math.max(width, height), Math.sqrt(4000000 / (width * height)));
+      canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.floor(width * scale)); canvas.height = Math.max(1, Math.floor(height * scale));
+      return { canvas: canvas, scale: scale };
+    }
+    async function extract() {
+      check(); progress('Reading ' + file.name + '…');
+      if (['csv', 'tsv', 'txt'].indexOf(ext) >= 0) {
+        var text = await file.text(); check();
+        return { sheets: [{ name: file.name, matrix: ImportCore.parseDelimited(text, ext === 'tsv' ? '\t' : undefined) }] };
+      }
+      if (ext === 'xlsx' || ext === 'xls') {
+        var buffer = await file.arrayBuffer(); check();
+        // The worker can be terminated on cancel, including during workbook parsing.
+        var source = 'importScripts(' + JSON.stringify(XLSX_URL) + '); onmessage = function(e) { try { var wb=XLSX.read(e.data,{type:"array",sheetRows:1001,cellDates:true,cellFormula:false,cellHTML:false,cellStyles:false}); if(wb.SheetNames.length>20) throw Error("Use a workbook with at most 20 worksheets."); var total=0; var sheets=wb.SheetNames.map(function(name){var ws=wb.Sheets[name]; var range=XLSX.utils.decode_range(ws["!fullref"]||ws["!ref"]||"A1"); if(range.e.r>=1000||range.e.c>=60) throw Error("Use worksheets with at most 1,000 rows and 60 columns, or paste a smaller selection."); var matrix=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:"",blankrows:true}).map(function(row){return row.map(function(v){return v instanceof Date ? v.toISOString().slice(0,10) : v;});}); total+=JSON.stringify(matrix).length; if(total>2000000) throw Error("This workbook contains too much data. Paste a smaller selection."); return {name:name,matrix:matrix};}); postMessage({sheets:sheets}); } catch(error){postMessage({error:error.message});} };';
+        blobUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+        sheetWorker = new Worker(blobUrl);
+        return await new Promise(function (resolve, reject) {
+          sheetWorker.onmessage = function (event) { event.data.error ? reject(new Error(event.data.error)) : resolve(event.data); };
+          sheetWorker.onerror = function () { reject(new Error('Could not read this workbook. Export it as CSV and try again.')); };
+          sheetWorker.postMessage(buffer, [buffer]);
+        });
+      }
+      if (ext === 'pdf') {
+        progress('Loading PDF reader…');
+        var pdfjs = await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@6.5.438/legacy/build/pdf.mjs'); check();
+        pdfjs.GlobalWorkerOptions.workerSrc = PDF_BASE + 'legacy/build/pdf.worker.mjs';
+        task = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()), isEvalSupported: false, cMapUrl: PDF_BASE + 'cmaps/', cMapPacked: true, standardFontDataUrl: PDF_BASE + 'standard_fonts/', wasmUrl: PDF_BASE + 'wasm/' });
+        task.onPassword = function () { task.destroy(); };
+        pdf = await task.promise; check();
+        if (pdf.numPages > 10) throw new Error('Use a PDF with at most 10 pages.');
+        var pages = [], usedOcr = false;
+        for (var p = 1; p <= pdf.numPages; p++) {
+          check(); progress('Reading PDF page ' + p + ' of ' + pdf.numPages + '…');
+          var page = await pdf.getPage(p), content = await page.getTextContent(), pageText = pdfText(content.items);
+          if (pageText.trim().length < 15) {
+            usedOcr = true;
+            var viewport = page.getViewport({ scale: 1 }), sized = sizedCanvas(viewport.width, viewport.height, 2.5);
+            await page.render({ canvasContext: sized.canvas.getContext('2d'), viewport: page.getViewport({ scale: sized.scale }) }).promise;
+            pageText = await recognize(sized.canvas);
+            canvas.width = 0; canvas.height = 0; canvas = null;
+          }
+          pages.push(pageText); page.cleanup();
+          if (pages.join('\n').length > 2000000) throw new Error('This PDF contains too much text. Use fewer pages.');
+        }
+        return { text: pages.join('\n\n'), ocr: usedOcr };
+      }
+      bitmap = await createImageBitmap(file); check();
+      if (bitmap.width * bitmap.height > 40000000) throw new Error('This photo is too large. Resize it below 40 megapixels.');
+      var image = sizedCanvas(bitmap.width, bitmap.height, 1);
+      image.canvas.getContext('2d').fillStyle = '#fff'; image.canvas.getContext('2d').fillRect(0, 0, image.canvas.width, image.canvas.height);
+      image.canvas.getContext('2d').drawImage(bitmap, 0, 0, image.canvas.width, image.canvas.height);
+      return { text: await recognize(image.canvas), ocr: true };
+    }
+    try { return await Promise.race([extract().finally(release), abortPromise]); }
+    finally { stopped = true; clearTimeout(deadline); if (signal) signal.removeEventListener('abort', abort); release(); }
+  }
+  return { read: read, pdfText: pdfText };
+})();
+</script>

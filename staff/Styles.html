@@ -443,4 +443,77 @@
     .labels { grid-template-columns: repeat(3, 1fr); gap: 6mm; }
     .label { border: 1px dashed #999; }
   }
+  /* Import: controls wrap within their panel; review rows stack on narrow screens. */
+  .import-inventory-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .import-inventory-actions .btn { white-space: normal; }
+  #stock-import { min-width: 0; }
+  .import-intro { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; margin: 4px 0 28px; }
+  .import-intro h2 { font-size: clamp(25px, 3vw, 34px); letter-spacing: -.7px; margin: 6px 0 10px; }
+  .import-intro p { margin: 0; color: var(--muted); max-width: 620px; }
+  .import-intro .eyebrow { font-size: 11px; font-weight: 750; letter-spacing: 1.4px; color: var(--brand); }
+  .import-steps { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; font-weight: 650; color: var(--brand-dark); }
+  .import-steps span { padding: 8px 11px; background: var(--brand-soft); border-radius: 6px; }
+  .import-workspace, .import-row-list { border: 0; margin: 0; padding: 0; min-width: 0; }
+  .import-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .import-main, .import-main > *, .import-map-grid > *, .import-row-fields > * { min-width: 0; }
+  .import-panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: clamp(16px, 2.4vw, 26px); margin-bottom: 20px; display: grid; gap: 16px; }
+  .import-panel h2, .import-panel h3, .import-panel p, .import-help p { margin: 0; }
+  .import-panel h2, .import-section-title h2 { font-size: 20px; }
+  .import-section-title { display: flex; align-items: center; gap: 10px; }
+  .import-section-title h2 { margin: 0; }
+  .import-step { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; flex: none; color: var(--brand-dark); background: var(--brand-soft); font-weight: 700; font-size: 14px; }
+  .import-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+  .import-tabs .btn { flex: 1 1 125px; padding-inline: 12px; font-size: 14px; }
+  .import-drop { min-height: 220px; border: 1px dashed #91ac9c; border-radius: 10px; background: #f7faf8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 22px 12px; text-align: center; cursor: pointer; }
+  .import-drop:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .import-file-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 10px; border: 1px solid var(--line); background: white; color: var(--brand); font-size: 25px; }
+  .import-drop input { font-size: 13px; margin-top: 8px; max-width: 100%; width: 245px; }
+  .import-small-actions { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+  .import-small-actions .btn { min-height: 36px; padding: 0; text-align: left; white-space: normal; border: 0; font-size: 14px; }
+  .import-help { padding: 0 4px 24px; display: grid; align-content: start; gap: 16px; color: var(--muted); font-size: 14px; }
+  .import-help h3 { color: var(--ink); font-size: 19px; line-height: 1.35; margin: 0; }
+  #stock-import textarea { resize: vertical; width: 100%; min-height: 140px; border: 1px solid #c9d3ce; border-radius: 10px; padding: 12px; background: white; font: 14px/1.6 ui-monospace, monospace; }
+  #stock-import input[type=url] { width: 100%; min-height: 52px; border: 1px solid #c9d3ce; border-radius: 10px; padding: 0 12px; background: white; }
+  #stock-import summary { cursor: pointer; font-weight: 650; padding: 10px 0; }
+  .import-map-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin: 12px 0 20px; }
+  .import-table-scroll { max-width: 100%; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .import-table-scroll table { border-collapse: collapse; font-size: 13px; }
+  .import-table-scroll td { border: 1px solid var(--line); padding: 8px; max-width: 250px; min-width: 90px; overflow-wrap: anywhere; }
+  .import-progress { padding: 14px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; border: 1px solid var(--brand-soft); border-radius: 10px; background: var(--brand-tint); margin-bottom: 16px; }
+  .import-progress .spinner { width: 24px; height: 24px; flex: none; }
+  #import-error:empty { display: none; }
+  #import-error { margin: 0 0 16px; }
+  .import-review { margin-top: 24px; }
+  .import-row { margin: 0 0 16px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); }
+  .import-row.excluded { background: #edf0ee; }
+  .import-row.excluded .import-row-fields { opacity: .6; }
+  .import-row-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 14px; }
+  .import-row-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .import-cell-name, .import-cell-category, .import-cell-source, .import-expiry-check { grid-column: 1 / -1; }
+  .import-row-fields .field label { font-size: 13px; }
+  .import-row-fields .field input { font-size: 16px; height: 46px; padding-inline: 10px; border-radius: 8px; }
+  .import-row-fields .error:empty { display: none; }
+  .import-review-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+  .import-review-summary strong { color: var(--brand-dark); }
+  .import-review-summary .btn { margin-left: auto; }
+  .import-confirm { align-items: flex-start; }
+  .import-confirm input { margin-top: 2px; }
+  .import-unmatched { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; font-size: 13px; }
+  .import-success { max-width: 720px; margin: 24px auto; }
+  .import-success-mark { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-size: 26px; }
+  @container view (min-width: 600px) {
+    .import-map-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .import-row-fields { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .import-cell-name { grid-column: span 2; }
+    .import-cell-category, .import-cell-source, .import-expiry-check { grid-column: auto; }
+  }
+  @container view (min-width: 950px) {
+    .import-workspace { grid-template-columns: minmax(0, 1fr) 240px; gap: 32px; }
+    .import-help { padding-top: 12px; }
+    .import-map-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 399px) {
+    .import-inventory-actions .btn { padding: 8px; font-size: 12px; min-height: 38px; }
+    .import-inventory-actions .icon { display: none; }
+  }
 </style>
