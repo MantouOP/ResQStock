@@ -22,7 +22,7 @@ var INFO_KEYS = {
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
     .setTitle('Donor wishlist')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover');
 }
 
 /** The only function donors' browsers can call. Cached for a minute. */

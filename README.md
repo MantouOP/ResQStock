@@ -3,7 +3,7 @@
 Expiry alerts and a live donor wishlist for **Kechara Soup Kitchen (KSK)**, built on top of KSK's existing Google Sheet.
 WIX2001 Thinking & Communication Skills SULAM project, Occurrence 10, Group 3.
 
-- **Staff app**: scan a shelf QR, record stock in and out, and see what is expiring. On phones it has a bottom tab bar. On a desktop (960px and wider) it has a sidebar, the inventory becomes a table, and pages use two columns.
+- **Staff app**: scan a shelf QR, record stock in and out, and see what is expiring. Phones and tablets use a bottom tab bar; desktop windows (1200px and wider) use a sidebar. Widgets, inventory rows and forms reflow to their available width, with vertical scrolling when needed.
 - **Donor wishlist**: a public page showing only item name, quantity needed, priority and last updated date. It works on phones, tablets and desktops.
 - **Stack**: Google Sheets, Google Apps Script, HTML, CSS and JavaScript. No server to host and nothing to pay for.
 
@@ -35,7 +35,7 @@ The demo runs on sample data, and every push to `main` redeploys it. It is the s
 npm test
 ```
 
-There are 25 tests covering the business rules and the plan's T1 to T11 scenarios. [docs/TESTING.md](docs/TESTING.md) shows which scenario each test covers and what still needs testing by hand.
+There are 26 tests covering the business rules and the plan's T1 to T11 scenarios. [docs/TESTING.md](docs/TESTING.md) shows which scenario each test covers and what still needs testing by hand.
 
 ## Folders
 

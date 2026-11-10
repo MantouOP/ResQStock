@@ -1,6 +1,6 @@
 # Testing
 
-`npm test` runs 25 automated tests in about a second: `test/logic.test.js` for the business rules, and `test/api.test.js` for the server code end to end on fake spreadsheets. The IDs match the Testing section of the system plan.
+`npm test` runs 26 automated tests in about a second: `test/logic.test.js` for the business rules, and `test/api.test.js` for the server code end to end on fake spreadsheets. The IDs match the Testing section of the system plan.
 
 | ID | Scenario | How it is checked | Status |
 | --- | --- | --- | --- |
@@ -18,13 +18,32 @@
 
 ## Screen sizes
 
-The preview has been checked in Chromium at 320 × 640 (small phone), 375 × 812 (phone), 812 × 375 (phone held sideways), 768 × 1024 (tablet), 1280 × 800 (laptop) and 1680 × 900 (wide monitor), with no sideways scrolling at any of them. The layout rules:
+The responsive layout uses these rules:
 
-- **Below 960px:** bottom tab bar.
-- **960px and up:** sidebar.
-- **Each page** reflows based on its own width, so a resized window behaves like a tablet.
+- **Below 1200px:** bottom tab bar, with horizontal icon-and-label tabs on tablets.
+- **1200px and up:** sidebar and a wider content area.
+- **Each page and card list** reflows based on its available width, including split-screen windows. Forms and widgets stay readable; pages scroll vertically.
+- **Donor cards** choose their column count from the list width, including beside donation details.
+- **Short windows:** sticky side panels return to normal page flow. Phone landscape also unsticks toolbars and form actions.
+- **Notched screens:** content and fixed controls use safe-area padding; zoom remains enabled.
 
-Still check this on a real iPhone (Safari) and an Android phone.
+### Responsive change validation (9 November 2026)
+
+Automated business tests: **26/26 passed**. Static demo and Apps Script bundle builds passed. The deployed responsive revision was checked in a Chromium browser on 9 November 2026. The overview, inventory, item details, stock-in/out forms, add-item form, wishlist manager, settings, QR labels, and public wishlist had no page-level horizontal overflow at all 10 viewport sizes below (100 page/viewport checks). Screenshots were also inspected for the desktop, iPad, phone, and short-landscape layouts. Inventory category chips intentionally scroll within their own row.
+
+For future layout changes, repeat these checks with `npm run preview` or the deployed demo:
+
+| Device/window | CSS viewport |
+| --- | --- |
+| Small phone | 320 × 640 |
+| Phone | 390 × 844 |
+| Phone landscape | 844 × 390 |
+| iPad portrait | 768 × 1024 and 820 × 1180 |
+| iPad landscape | 1024 × 768 and 1180 × 820 |
+| Laptop | 1280 × 800 |
+| Desktop | 1440 × 900 and 1920 × 1080 |
+
+The checks above used the baseline sample data and browser viewport emulation. Physical iPad/iPhone Safari, Android Chrome, printed QR labels, long item names/units, empty results, and 200% zoom still need manual testing. Check that names and quantities remain readable, fields and buttons stay inside their cards, navigation and save controls remain reachable, and QR labels print in three columns.
 
 ## What the preview and the tests cannot prove
 
