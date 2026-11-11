@@ -46,6 +46,7 @@ const server = http.createServer((req, res) => {
     return send(200, TYPES[path.extname(file)] || 'application/octet-stream', fs.readFileSync(file));
   };
   try {
+    if (url.pathname === '/api/sheets') return require('../api/sheets')(req, res);
     if (url.pathname === '/' || url.pathname === '/index.html') return send(200, TYPES['.html'], renderPage('staff', { app: 'staff' }));
     if (url.pathname === '/wishlist') return send(200, TYPES['.html'], renderPage('wishlist', { app: 'wishlist' }));
     if (url.pathname === '/dev/frame') {

@@ -149,7 +149,12 @@
     });
     return max;
   };
-  Sheet.prototype.getMaxRows = function () { return Math.max(1000, this._d.data.length); };
+  Sheet.prototype.getMaxRows = function () { return Math.max(this._d.maxRows || 1000, this._d.data.length); };
+  Sheet.prototype.insertRowsAfter = function (after, count) {
+    this._d.maxRows = this.getMaxRows() + count;
+    if (after < this._d.data.length) this._d.data.splice.apply(this._d.data, [after, 0].concat(Array.from({ length: count }, function () { return []; })));
+    save(); return this;
+  };
   Sheet.prototype.getMaxColumns = function () { return Math.max(26, this.getLastColumn()); };
   Sheet.prototype.getRange = function (a, b, c, d) {
     if (typeof a === 'string') return a1Range(this, a);

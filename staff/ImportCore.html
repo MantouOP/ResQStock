@@ -1,0 +1,185 @@
+<script>
+/* Pure import parsing. No file access, network, HTML, or stock writes here. */
+var ImportCore = (function () {
+  'use strict';
+  var MAX_ROWS = 200, MAX_COLUMNS = 60, MAX_TEXT = 2000000;
+  var FIELDS = ['name', 'qty', 'unit', 'category', 'expiry', 'received', 'source', 'noExpiry'];
+  var ALIASES = {
+    name: ['item', 'item name', 'product', 'product name', 'description', 'name', 'nama', 'nama barang', 'nama item', 'barang'],
+    qty: ['qty', 'quantity', 'quantity received', 'qty received', 'stock in', 'kuantiti', 'kuantiti masuk', 'kuantiti diterima', 'jumlah'],
+    unit: ['unit', 'units', 'uom', 'unit of measure', 'satuan'],
+    category: ['category', 'kategori'],
+    expiry: ['expiry', 'expiry date', 'expiration', 'expiration date', 'best before', 'tarikh luput'],
+    received: ['received', 'received date', 'received on', 'date received', 'date', 'tarikh diterima', 'tarikh'],
+    source: ['source', 'source type', 'sumber', 'jenis sumber'],
+    noExpiry: ['no expiry', 'no expiry date', 'tiada tarikh luput']
+  };
+  function text(v) { return v === null || v === undefined ? '' : String(v).trim(); }
+  function clean(v) { return text(v).replace(/\s+/g, ' '); }
+  function header(v) { return clean(v).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function error(message) { throw new Error(message); }
+
+  function parseDelimited(input, delimiter) {
+    var value = String(input || '').replace(/^\uFEFF/, '');
+    if (value.length > MAX_TEXT) error('The text is too large. Import a smaller list.');
+    if (!delimiter) {
+      var counts = { ',': 0, '\t': 0, ';': 0 }, quote = false;
+      for (var j = 0; j < value.length; j++) {
+        var ch = value[j];
+        if (ch === '"') { if (quote && value[j + 1] === '"') j++; else quote = !quote; }
+        else if (!quote && (ch === '\r' || ch === '\n')) break;
+        else if (!quote && Object.prototype.hasOwnProperty.call(counts, ch)) counts[ch]++;
+      }
+      delimiter = ['\t', ';', ','].sort(function (a, b) { return counts[b] - counts[a]; })[0];
+      if (!counts[delimiter]) delimiter = ',';
+    }
+    if ([',', '\t', ';'].indexOf(delimiter) === -1) error('Choose comma, tab, or semicolon separation.');
+    var rows = [], row = [], cell = '', quoted = false, closed = false;
+    function pushCell() {
+      row.push(cell); cell = ''; closed = false;
+      if (row.length > MAX_COLUMNS) error('Too many columns. Keep at most 60 columns.');
+    }
+    function pushRow() {
+      pushCell();
+      if (row.some(function (v) { return text(v) !== ''; })) rows.push(row);
+      row = [];
+      if (rows.length > 1000) error('Too many source rows. Split the file into smaller imports of 200 rows.');
+    }
+    for (var i = 0; i < value.length; i++) {
+      var c = value[i];
+      if (quoted) {
+        if (c === '"' && value[i + 1] === '"') { cell += '"'; i++; }
+        else if (c === '"') { quoted = false; closed = true; }
+        else cell += c;
+      } else if (c === delimiter) pushCell();
+      else if (c === '\n' || c === '\r') { if (c === '\r' && value[i + 1] === '\n') i++; pushRow(); }
+      else if (c === '"' && cell === '' && !closed) quoted = true;
+      else if (closed) { if (!/\s/.test(c)) error('Unexpected text after a closing quote. Check the CSV.'); }
+      else cell += c;
+    }
+    if (quoted) error('A quoted field is not closed. Check the CSV.');
+    if (cell !== '' || row.length || closed) pushRow();
+    return rows;
+  }
+
+  function mappingFor(row) {
+    var mapping = {};
+    row.forEach(function (v, index) {
+      var key = header(v);
+      FIELDS.forEach(function (field) {
+        if (mapping[field] === undefined && ALIASES[field].some(function (a) { return header(a) === key; })) mapping[field] = index;
+      });
+    });
+    return mapping;
+  }
+  function detectHeader(matrix) {
+    for (var i = 0; i < Math.min(matrix.length, 10); i++) {
+      var mapping = mappingFor(matrix[i]);
+      if (mapping.name !== undefined && mapping.qty !== undefined) return { headerRow: i, mapping: mapping };
+    }
+    return { headerRow: -1, mapping: { name: 0, qty: 1, unit: 2, expiry: 3 } };
+  }
+
+  function parseQuantity(value) {
+    var s = text(value);
+    if (!/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(s)) return { value: s, error: 'Enter a quantity as a number (up to 2 decimal places), without prices or units.' };
+    var n = Number(s.replace(/,/g, ''));
+    if (!(n > 0 && n <= 100000 && isFinite(n))) return { value: s, error: 'Quantity must be more than 0 and at most 100,000.' };
+    return { value: n, error: '' };
+  }
+
+  function dateParts(y, m, d) {
+    var stamp = new Date(Date.UTC(y, m - 1, d));
+    if (y < 1900 || y > 2100 || stamp.getUTCFullYear() !== y || stamp.getUTCMonth() !== m - 1 || stamp.getUTCDate() !== d) return { value: '', error: 'Enter a valid calendar date from 1900 to 2100.' };
+    return { value: String(y) + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0'), error: '' };
+  }
+  function parseDate(value, order) {
+    if (value === '' || value === null || value === undefined) return { value: '', error: '' };
+    if (typeof value === 'number') {
+      if (!isFinite(value) || value < 1 || value > 73415) return { value: '', error: 'Invalid spreadsheet date.' };
+      var excel = new Date(Date.UTC(1899, 11, 30) + Math.floor(value) * 86400000);
+      return dateParts(excel.getUTCFullYear(), excel.getUTCMonth() + 1, excel.getUTCDate());
+    }
+    var s = clean(value), match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+    if (match) return dateParts(+match[1], +match[2], +match[3]);
+    match = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/.exec(s);
+    if (match) {
+      var a = +match[1], b = +match[2], y = +match[3];
+      if (order !== 'dmy' && order !== 'mdy' && a <= 12 && b <= 12 && a !== b) return { value: s, error: 'Ambiguous date: choose day/month or month/day.' };
+      var monthFirst = order === 'mdy' || (order !== 'dmy' && b > 12);
+      return dateParts(y, monthFirst ? a : b, monthFirst ? b : a);
+    }
+    match = /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/.exec(s);
+    if (match) {
+      var months = ['jan januari january', 'feb februari february', 'mar mac march', 'apr april', 'may mei', 'jun june', 'jul july julai', 'aug august ogos', 'sep sept september', 'oct october oktober', 'nov november', 'dec december disember'];
+      var month = months.findIndex(function (names) { return names.split(' ').indexOf(match[2].toLowerCase()) !== -1; });
+      if (month >= 0) return dateParts(+match[3], month + 1, +match[1]);
+    }
+    return { value: s, error: 'Use YYYY-MM-DD, a spreadsheet date, or a date with a chosen day/month order.' };
+  }
+  function noExpiryValue(v) { return /^(?:no expiry(?: date)?|none|n\/a|tiada(?: tarikh luput)?)$/i.test(clean(v)); }
+  function yes(v) { return v === true || /^(yes|true|1|ya)$/i.test(text(v)); }
+  function mapRows(matrix, options) {
+    options = options || {};
+    var headerRow = options.headerRow === undefined ? -1 : Number(options.headerRow);
+    var mapping = options.mapping || {}, defaults = options.defaults || {}, out = [];
+    var originalHeader = headerRow >= 0 && matrix[headerRow] ? matrix[headerRow].map(header).join('|') : '';
+    matrix.forEach(function (cells, index) {
+      if (index <= headerRow || !cells.some(function (v) { return text(v); })) return;
+      if (originalHeader && cells.map(header).join('|') === originalHeader) return;
+      function get(field) { var col = mapping[field]; return col === undefined || col === '' || col === null || +col < 0 ? '' : cells[+col] === undefined ? '' : cells[+col]; }
+      var rawExpiry = get('expiry');
+      var expiry = parseDate(noExpiryValue(rawExpiry) ? '' : rawExpiry, options.dateOrder);
+      var received = parseDate(get('received') || defaults.received || '', options.dateOrder);
+      var quantity = parseQuantity(get('qty'));
+      var row = {
+        sourceRow: index + 1, include: true, name: clean(get('name')), qty: quantity.value,
+        unit: clean(get('unit') || defaults.unit), category: clean(get('category') || defaults.category),
+        expiry: expiry.value, noExpiry: yes(get('noExpiry')) || noExpiryValue(rawExpiry) || (!!defaults.noExpiry && !text(rawExpiry)),
+        received: received.value, source: clean(get('source') || defaults.source), errors: {}
+      };
+      if (!row.name) row.errors.name = 'Enter an item name.';
+      if (quantity.error) row.errors.qty = quantity.error;
+      if (expiry.error) row.errors.expiry = expiry.error;
+      if (received.error) row.errors.received = received.error;
+      out.push(row);
+    });
+    if (out.length > MAX_ROWS) error('Import at most 200 stock rows at a time. Split this list into smaller files.');
+    return out;
+  }
+
+  function documentRows(value) {
+    var input = String(value || '');
+    if (input.length > MAX_TEXT) error('The extracted text is too large. Import fewer pages.');
+    if (/\t/.test(input)) return { matrix: parseDelimited(input, '\t'), unmatched: [] };
+    var delimited = parseDelimited(input);
+    if (detectHeader(delimited).headerRow >= 0) return { matrix: delimited, unmatched: [] };
+    var rows = [['Item', 'Quantity', 'Unit', 'Expiry']], unmatched = [];
+    input.split(/\r?\n/).forEach(function (line) {
+      line = clean(line);
+      if (!line) return;
+      var match = /^(.*?)\s+(\d+(?:\.\d{1,3})?)\s+(bags?|tins?|cans?|packs?|packets?|bottles?|cartons?|bars?|boxes|box|pieces?|pcs|units?|kg|g|litres?|liters?|l|loaves|loaf|bungkus|botol|tin|kotak|biji)(?:\s+(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{4}|no expiry(?: date)?|tiada))?$/i.exec(line);
+      if (match && !/^(total|subtotal|tax|amount|jumlah)\b/i.test(match[1]) && !/\b(?:RM|MYR|USD)\b|[$€£]/.test(match[1])) rows.push([match[1], match[2], match[3], match[4] || '']);
+      else unmatched.push(line);
+    });
+    return { matrix: rows, unmatched: unmatched };
+  }
+
+  function parseSheetUrl(value) {
+    var url;
+    try { url = new URL(text(value)); } catch (e) { error('Paste a valid Google Sheets link.'); }
+    var match = /^\/spreadsheets\/d\/(e\/)?([A-Za-z0-9_-]{20,180})(?:\/|$)/.exec(url.pathname);
+    if (url.protocol !== 'https:' || url.hostname !== 'docs.google.com' || url.username || url.password || url.port || !match) error('Paste an HTTPS Google Sheets link from docs.google.com.');
+    var query = new URLSearchParams(url.hash.replace(/^#/, ''));
+    var gid = query.get('gid') || url.searchParams.get('gid') || '0';
+    if (!/^\d{1,15}$/.test(gid)) error('The worksheet ID (gid) must contain numbers only.');
+    return { id: match[2], gid: gid, published: !!match[1] };
+  }
+  function toCsv(rows) {
+    return rows.map(function (row) { return row.map(function (v) { var s = text(v); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(','); }).join('\r\n');
+  }
+  return { fields: FIELDS, maxRows: MAX_ROWS, parseDelimited: parseDelimited, detectHeader: detectHeader,
+    mappingFor: mappingFor, mapRows: mapRows, parseQuantity: parseQuantity, parseDate: parseDate,
+    documentRows: documentRows, parseSheetUrl: parseSheetUrl, toCsv: toCsv };
+})();
+</script>

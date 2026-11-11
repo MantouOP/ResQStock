@@ -56,6 +56,18 @@ They run the real server code, but against stand-ins for Google's services (`dev
 - Printing the QR labels from inside the Apps Script page. If the Print button does nothing, use the browser's own Print menu.
 - Item photos with a real phone: "Take photo" opening the camera, pinch-to-zoom in the cropper, and iPhone photos. The preview tested the cropper with a mouse, the slider and generated images; the server tests cover saving, replacing, removing and rejecting non-image files.
 
+## Stock imports
+
+`npm test` includes import-specific cases for CSV/TSV quoting and malformed data, English/Malay headings, strict quantities and date conventions, row limits, formula-like text, unit conflicts, access checks, all-row validation before writes, custom/shared logs, repeated content, lost responses, failed journal finalization, conflicting pending ranges, and bounded Google export redirects. Extraction tests cover PDF column reconstruction and bitmap cleanup after cancellation.
+
+Synthetic files in `test/fixtures/` contain **Test rice: 4 bags** and **Test soap: 12 bars**, both with no expiry. The XLSX also has a second worksheet with **Test oats: 8 bags**. Use these to check CSV, workbook selection, text PDF, scanned PDF and JPEG workflows. For each file: verify the extracted values, correct any OCR mistakes, prepare review, import, and verify inventory quantities. Repeat the same content to verify the duplicate warning. Edit a checked row or its mapping and verify confirmation resets. Cancel a document read and navigate away to check cleanup.
+
+Verified in the Vercel feature preview on 10 November 2026: CSV import creates Test rice at 4 bags and Test soap at 12 bars; XLSX worksheet selection produces Test oats at 8 bags; legacy XLS, text PDF, scanned PDF and JPEG all produce the expected review values. Re-importing the PDF after CSV raises a duplicate-content warning. Editing an acknowledged quantity disables saving. At viewport widths 320, 390, 820 and 1440, the review screen has no document overflow or out-of-bounds fields/buttons.
+
+Verified again on the public production alias: the Google Sheets browser flow reads 31 source rows from Google's official Sheets quickstart sample (read only); pasted TSV rejects 0.001 kg, then imports an edited 0.01 kg and shows exactly 0.01 kg in inventory. Canceling a photo read and immediately selecting sample rows preserves the new draft. The protected preview's expired-session fetch failure did not occur on the public alias.
+
+Automated tests also cover cleanup after canceling an image read, strict calendar dates, two-decimal stock precision and an older save response arriving after a newer pending request. Real Apps Script permissions, concurrent manual Sheet edits, quotas and physical iPad/iPhone Safari remain manual checks.
+
 ## Bug log
 
 Najwa keeps the shared bug log with these columns: ID, steps, expected result, actual result, owner, status. Retest every fix, and run `npm test` before each KSK review.

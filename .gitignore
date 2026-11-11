@@ -15,3 +15,6 @@ Thumbs.db
 # Real KSK data must never be in this repo
 *.xlsx
 *.csv
+# Synthetic import test data only; real stock exports remain ignored.
+!test/fixtures/stock.csv
+!test/fixtures/stock.xlsx
