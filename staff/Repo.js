@@ -271,6 +271,70 @@ function updateItemRow_(ss, rowNumber, fields) {
 }
 
 /* -------------------------------------------------------------------- */
+/* RQ_Photos                                                            */
+/* -------------------------------------------------------------------- */
+
+var PHOTO_PATTERN_ = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/;
+
+function photosSheet_(ss, create) {
+  var sheet = findSheet_(ss, CONFIG.TABS.photos);
+  if (!sheet && create) {
+    sheet = ss.insertSheet(CONFIG.TABS.photos);
+    sheet.getRange(1, 1, 1, CONFIG.PHOTO.headers.length).setValues([CONFIG.PHOTO.headers]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+    sheet.hideSheet();
+  }
+  return sheet;
+}
+
+/** { 'RICE-01': { row, version } }, read without the image data so every request stays light. */
+function readPhotoIndex_(ss) {
+  var index = {};
+  var sheet = photosSheet_(ss, false);
+  if (!sheet || sheet.getLastRow() < 2) return index;
+  var n = sheet.getLastRow() - 1;
+  var ids = sheet.getRange(2, 1, n, 1).getValues();
+  var versions = sheet.getRange(2, 3, n, 1).getValues();
+  ids.forEach(function (r, i) {
+    var id = Logic.cleanText(r[0]).toUpperCase();
+    if (id) index[id] = { row: i + 2, version: Logic.cleanText(versions[i][0]) || 'row' + (i + 2) };
+  });
+  return index;
+}
+
+/** The images themselves, only for the IDs asked for. Anything that is not an image is skipped. */
+function readPhotos_(ss, ids) {
+  var out = {};
+  var sheet = photosSheet_(ss, false);
+  if (!sheet || sheet.getLastRow() < 2) return out;
+  var want = {};
+  ids.forEach(function (id) { want[String(id).toUpperCase()] = true; });
+  sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues().forEach(function (r, i) {
+    var id = Logic.cleanText(r[0]).toUpperCase();
+    var data = String(r[1] || '');
+    if (id && want[id] && PHOTO_PATTERN_.test(data)) out[id] = { url: data, version: Logic.cleanText(r[2]) || 'row' + (i + 2) };
+  });
+  return out;
+}
+
+/** Saves or replaces an item's photo. Returns its new version, which tells phones to refresh their copy. */
+function writePhoto_(ss, itemId, dataUrl, tz) {
+  var sheet = photosSheet_(ss, true);
+  var version = Utilities.formatDate(new Date(), tz, 'yyMMdd-HHmmss') + '-' + Utilities.getUuid().slice(0, 6);
+  var hit = readPhotoIndex_(ss)[itemId.toUpperCase()];
+  var row = [itemId, dataUrl, version];
+  if (hit) sheet.getRange(hit.row, 1, 1, 3).setValues([row]);
+  else sheet.appendRow(row);
+  return version;
+}
+
+function deletePhoto_(ss, itemId) {
+  var sheet = photosSheet_(ss, false);
+  var hit = sheet ? readPhotoIndex_(ss)[itemId.toUpperCase()] : null;
+  if (hit) sheet.deleteRow(hit.row);
+}
+
+/* -------------------------------------------------------------------- */
 /* Whole state                                                          */
 /* -------------------------------------------------------------------- */
 
@@ -286,7 +350,7 @@ function loadState_() {
     stockIn: readRows_(tables.stockIn, tz),
     stockOut: readRows_(tables.stockOut, tz)
   };
-  var state = { ss: ss, settings: settings, tz: tz, map: map, tables: tables, raw: raw, today: todayIso_(tz) };
+  var state = { ss: ss, settings: settings, tz: tz, map: map, tables: tables, raw: raw, today: todayIso_(tz), photoIndex: readPhotoIndex_(ss) };
   rebuild_(state);
   return state;
 }

@@ -128,6 +128,38 @@ test('the dashboard lists what donors are asked for most, High first', () => {
   dash.needs.forEach((n) => assert.ok(n.id && n.name && n.needed, JSON.stringify(n)));
 });
 
+test('item photos: save, read back, replace, reject bad files, remove', () => {
+  const { drive, staff, ss } = seeded();
+  const photo = 'data:image/jpeg;base64,' + 'A'.repeat(400);
+
+  const saved = ok(api(staff, 'setPhoto', { id: 'RICE-01', dataUrl: photo }));
+  assert.ok(saved.photo);
+  assert.equal(ok(api(staff, 'inventory')).items.find((i) => i.id === 'RICE-01').photo, saved.photo);
+  assert.equal(ok(api(staff, 'inventory')).items.find((i) => i.id === 'OIL-01').photo, '');
+
+  const photos = ok(api(staff, 'photos', { ids: ['RICE-01', 'OIL-01'] })).photos;
+  assert.deepEqual(Object.keys(photos), ['RICE-01']);
+  assert.equal(photos['RICE-01'].url, photo);
+  assert.equal(photos['RICE-01'].version, saved.photo);
+
+  const again = ok(api(staff, 'setPhoto', { id: 'rice-01', dataUrl: 'data:image/jpeg;base64,' + 'B'.repeat(400) }));
+  assert.notEqual(again.photo, saved.photo);
+  assert.equal(ss.getSheetByName('RQ_Photos').getLastRow(), 2, 'replacing keeps one row per item');
+
+  assert.equal(api(staff, 'setPhoto', { id: 'RICE-01', dataUrl: 'javascript:alert(1)' }).ok, false);
+  assert.equal(api(staff, 'setPhoto', { id: 'RICE-01', dataUrl: 'data:image/svg+xml;base64,PHN2Zz4=' }).ok, false);
+  assert.equal(api(staff, 'setPhoto', { id: 'RICE-01', dataUrl: 'data:image/jpeg;base64,' + 'A'.repeat(60000) }).ok, false);
+
+  ok(api(staff, 'removePhoto', { id: 'RICE-01' }));
+  assert.equal(ok(api(staff, 'item', { id: 'RICE-01' })).item.photo, '');
+
+  // Photos stay internal: the public donor page still sends four fields per item.
+  ok(api(staff, 'setPhoto', { id: 'BEANS-01', dataUrl: photo }));
+  ok(api(staff, 'publishWishlist'));
+  const data = plain(loadApp('wishlist', drive, { user: '' }).getWishlist());
+  data.items.forEach((it) => assert.deepEqual(Object.keys(it).sort(), ['name', 'needed', 'priority', 'updated']));
+});
+
 test('T8: with a PIN, wrong guesses are refused and then locked out', () => {
   const { staff } = seeded();
   staff.PropertiesService.getScriptProperties().setProperty('STAFF_PIN', '246810');

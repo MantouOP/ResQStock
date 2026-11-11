@@ -1,6 +1,6 @@
 # Testing
 
-`npm test` runs 26 automated tests in about a second: `test/logic.test.js` for the business rules, and `test/api.test.js` for the server code end to end on fake spreadsheets. The IDs match the Testing section of the system plan.
+`npm test` runs 27 automated tests in about a second: `test/logic.test.js` for the business rules, and `test/api.test.js` for the server code end to end on fake spreadsheets. The IDs match the Testing section of the system plan.
 
 | ID | Scenario | How it is checked | Status |
 | --- | --- | --- | --- |
@@ -54,6 +54,7 @@ They run the real server code, but against stand-ins for Google's services (`dev
 - Speed and Apps Script quotas on KSK's full history.
 - Scanning a printed QR label with a phone camera.
 - Printing the QR labels from inside the Apps Script page. If the Print button does nothing, use the browser's own Print menu.
+- Item photos with a real phone: "Take photo" opening the camera, pinch-to-zoom in the cropper, and iPhone photos. The preview tested the cropper with a mouse, the slider and generated images; the server tests cover saving, replacing, removing and rejecting non-image files.
 
 ## Stock imports
 
@@ -65,7 +66,7 @@ Verified in the Vercel feature preview on 10 November 2026: CSV import creates T
 
 Verified again on the public production alias: the Google Sheets browser flow reads 31 source rows from Google's official Sheets quickstart sample (read only); pasted TSV rejects 0.001 kg, then imports an edited 0.01 kg and shows exactly 0.01 kg in inventory. Canceling a photo read and immediately selecting sample rows preserves the new draft. The protected preview's expired-session fetch failure did not occur on the public alias.
 
-The 59 automated tests additionally cover late image-decode cleanup, strict calendar dates, two-decimal stock precision and an older save response arriving after a newer pending request. Real Apps Script permission behavior, concurrent manual Sheet edits, quotas and physical iPad/iPhone Safari remain manual checks.
+Automated tests also cover cleanup after canceling an image read, strict calendar dates, two-decimal stock precision and an older save response arriving after a newer pending request. Real Apps Script permissions, concurrent manual Sheet edits, quotas and physical iPad/iPhone Safari remain manual checks.
 
 ## Bug log
 

@@ -37,7 +37,10 @@ function apiHandlers_() {
     publishWishlist: apiPublishWishlist_,
     settings: apiSettings_,
     saveSettings: apiSaveSettings_,
-    labels: apiLabels_
+    labels: apiLabels_,
+    photos: apiPhotos_,
+    setPhoto: apiSetPhoto_,
+    removePhoto: apiRemovePhoto_
   };
 }
 
@@ -105,8 +108,12 @@ function dashboard_(state) {
   dash.needsTotal = needs.length;
   dash.needs = needs.slice(0, 5).map(function (r) {
     var item = findItemByName_(state.inventory, r.name);
-    return { id: item ? item.id : '', name: r.name, needed: r.needed, priority: r.priority, category: item ? item.category : '' };
+    return {
+      id: item ? item.id : '', name: r.name, needed: r.needed, priority: r.priority,
+      category: item ? item.category : '', photo: item ? photoVersion_(state, item.id) : ''
+    };
   });
+  dash.alerts.forEach(function (a) { a.photo = photoVersion_(state, a.itemId); });
   return dash;
 }
 
@@ -114,7 +121,7 @@ function apiInventory_() {
   var state = loadState_();
   return {
     today: state.today,
-    items: state.inventory.items.map(itemSummary_),
+    items: state.inventory.items.map(function (it) { return itemSummary_(it, state); }),
     categories: categoriesFor_(state),
     warnings: state.inventory.warnings
   };
@@ -358,12 +365,52 @@ function apiSaveSettings_(p) {
 }
 
 /* -------------------------------------------------------------------- */
+/* Item photos                                                          */
+/* -------------------------------------------------------------------- */
+
+/** The images for the IDs a page needs. Lists only carry a version, so phones fetch each photo once. */
+function apiPhotos_(p) {
+  var ids = Array.isArray(p.ids) ? p.ids.slice(0, 200).map(String) : [];
+  return { photos: ids.length ? readPhotos_(getSpreadsheet_(), ids) : {} };
+}
+
+function apiSetPhoto_(p) {
+  return withLock_(function () {
+    var state = loadState_();
+    var item = Logic.findItem(state.inventory, p.id);
+    if (!item) throw userError_('This item was not found.', null, 'notfound');
+    if (item.unlisted) throw userError_('Add this item to the item list first (ResQStock > Set up or check), then add its photo.', null, 'invalid');
+    var data = String(p.dataUrl || '');
+    if (!PHOTO_PATTERN_.test(data)) throw userError_('That file is not a photo ResQStock can save. Use a JPG or PNG.', null, 'invalid');
+    if (data.length > CONFIG.PHOTO.maxChars) throw userError_('That photo is too large to save. Zoom in a little or try another photo.', null, 'invalid');
+    var version = writePhoto_(state.ss, item.id, data, state.tz);
+    return { id: item.id, photo: version, message: 'Photo saved for ' + item.name + '.' };
+  });
+}
+
+function apiRemovePhoto_(p) {
+  return withLock_(function () {
+    var state = loadState_();
+    var item = Logic.findItem(state.inventory, p.id);
+    if (!item) throw userError_('This item was not found.', null, 'notfound');
+    deletePhoto_(state.ss, item.id);
+    return { id: item.id, photo: '', message: 'Photo removed from ' + item.name + '.' };
+  });
+}
+
+function photoVersion_(state, id) {
+  var hit = id && state.photoIndex ? state.photoIndex[String(id).toUpperCase()] : null;
+  return hit ? hit.version : '';
+}
+
+/* -------------------------------------------------------------------- */
 /* Shapes sent to the browser                                           */
 /* -------------------------------------------------------------------- */
 
-function itemSummary_(item) {
+function itemSummary_(item, state) {
   return {
     id: item.id,
+    photo: photoVersion_(state, item.id),
     name: item.name,
     category: item.category,
     unit: item.unit,
@@ -381,7 +428,7 @@ function itemSummary_(item) {
 
 function itemDetail_(item, state) {
   var w = Logic.wishlistEntry(item, state.settings.highBelow);
-  var detail = itemSummary_(item);
+  var detail = itemSummary_(item, state);
   detail.batches = item.openBatches;
   detail.history = item.history.slice(0, 15);
   detail.suggestedBatch = item.suggestedBatch;

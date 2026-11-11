@@ -49,7 +49,10 @@
     bread: '<path d="M5 11a3.5 3.5 0 0 1 2-6.4h10A3.5 3.5 0 0 1 19 11v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"/>',
     bottle: '<path d="M10 2.5h4V6l2 3v11.5a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V9l2-3z"/><path d="M8 13h8"/>',
     jar: '<rect x="7" y="3" width="10" height="3.5" rx="1"/><path d="M6.5 6.5h11v12.5a2 2 0 0 1-2 2h-7a2 2 0 0 1-2-2z"/><path d="M6.5 11h11"/>',
-    drop: '<path d="M12 3.5s6 6.3 6 10.5a6 6 0 0 1-12 0c0-4.2 6-10.5 6-10.5z"/>'
+    drop: '<path d="M12 3.5s6 6.3 6 10.5a6 6 0 0 1-12 0c0-4.2 6-10.5 6-10.5z"/>',
+    camera: '<path d="M4 8h3.2l1.8-2.6h6l1.8 2.6H20v11H4z"/><circle cx="12" cy="13.2" r="3.4"/>',
+    image: '<rect x="3.5" y="4.5" width="17" height="15" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16.5l-5-5-9 8"/>',
+    rotate: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4.5v5h-5"/>'
   };
   var FILLED = { more: true, leaf: true };
 
@@ -77,7 +80,71 @@
     return 'c' + (h % 6);
   }
 
-  function thumb(category) { return '<span class="thumb ' + catClass(category) + '">' + icon(catIcon(category)) + '</span>'; }
+  /**
+   * An item's picture: its photo when it has one, otherwise the category icon.
+   * Lists only carry a photo version; the image itself comes from the photo
+   * cache, or is fetched once by hydratePhotos() and swapped in.
+   */
+  function thumb(category, id, version) {
+    var key = id && version ? String(id).toUpperCase() : '';
+    var hit = key ? cachedPhoto(key, version) : '';
+    if (hit) return '<span class="thumb photo"><img src="' + esc(hit) + '" alt=""></span>';
+    return '<span class="thumb ' + catClass(category) + '"' + (key ? ' data-photo="' + esc(key) + '" data-v="' + esc(version) + '"' : '') + '>' +
+      icon(catIcon(category)) + '</span>';
+  }
+
+  /* ================================================================== */
+  /* Photo cache (kept on the phone, so each photo downloads once)       */
+  /* ================================================================== */
+
+  var PHOTO_KEY = 'resqstock.photos.v1';
+  var photoCache = (function () {
+    try { return JSON.parse(localStorage.getItem(PHOTO_KEY) || '{}') || {}; } catch (e) { return {}; }
+  })();
+  var photoTried = {};
+
+  function cachedPhoto(key, version) {
+    var c = photoCache[key];
+    return c && c.v === version && /^data:image\//.test(c.url) ? c.url : '';
+  }
+
+  function rememberPhoto(id, version, url) {
+    var key = String(id).toUpperCase();
+    if (url) photoCache[key] = { v: version, url: url }; else delete photoCache[key];
+    try { localStorage.setItem(PHOTO_KEY, JSON.stringify(photoCache)); } catch (e) { /* storage full or blocked: photos load again next visit */ }
+  }
+
+  function showPhoto(node, url) {
+    node.className = 'thumb photo';
+    node.removeAttribute('data-photo');
+    node.removeAttribute('data-v');
+    node.innerHTML = '<img src="' + esc(url) + '" alt="">';
+  }
+
+  /** Swaps icons for photos: from the cache, or with one request for every photo still missing. */
+  function hydratePhotos() {
+    var waiting = {};
+    Array.prototype.forEach.call(app.querySelectorAll('[data-photo]'), function (node) {
+      var key = node.getAttribute('data-photo');
+      var v = node.getAttribute('data-v');
+      var hit = cachedPhoto(key, v);
+      if (hit) showPhoto(node, hit);
+      else if (!photoTried[key + '@' + v]) waiting[key] = v;
+    });
+    var ids = Object.keys(waiting);
+    if (!ids.length) return;
+    ids.forEach(function (key) { photoTried[key + '@' + waiting[key]] = true; });
+    call('photos', { ids: ids }).then(function (res) {
+      Object.keys(res.photos || {}).forEach(function (key) { rememberPhoto(key, res.photos[key].version, res.photos[key].url); });
+      hydratePhotos();
+    }).catch(function () { /* the category icons stay; nothing else depends on photos */ });
+  }
+
+  var photoTimer = null;
+  new MutationObserver(function () {
+    clearTimeout(photoTimer);
+    photoTimer = setTimeout(hydratePhotos, 40);
+  }).observe(app, { childList: true, subtree: true });
 
   /* ================================================================== */
   /* Small helpers                                                       */
@@ -463,7 +530,7 @@
     var inStock = it.stock > 0;
     var qty = inStock ? qtyText(it.stock, it.unit) : 'Out of stock';
     var next = inStock ? (it.nearestExpiry ? fmtDay(it.nearestExpiry) : 'No expiry date') : '';
-    return '<button class="row-card item-row" type="button" data-go="' + esc(route || itemRoute(it.id)) + '"' + (disabled ? ' disabled' : '') + '>' + thumb(it.category) +
+    return '<button class="row-card item-row" type="button" data-go="' + esc(route || itemRoute(it.id)) + '"' + (disabled ? ' disabled' : '') + '>' + thumb(it.category, it.id, it.photo) +
       '<span class="main"><span class="name">' + esc(it.name) + '</span>' +
         '<span class="meta m-only">' + esc([it.category, inStock ? 'Qty: ' + qty : qty].filter(Boolean).join(' · ')) + '</span>' +
         (next ? '<span class="meta m-only">' + esc(it.nearestExpiry ? 'Next expiry: ' + next : next) + '</span>' : '') +
@@ -481,7 +548,7 @@
 
   function itemLine(it) {
     var stock = 'In stock: ' + qtyText(it.stock, it.unit) + (it.expiredQty > 0 ? ' (' + qtyText(it.expiredQty, it.unit) + ' expired)' : '');
-    return '<div class="item-line">' + thumb(it.category) + '<div><div class="name">' + esc(it.name) + '</div><div class="meta">' + esc(stock) + '</div></div></div>';
+    return '<div class="item-line">' + thumb(it.category, it.id, it.photo) + '<div><div class="name">' + esc(it.name) + '</div><div class="meta">' + esc(stock) + '</div></div></div>';
   }
 
   /** Shown beside the stock in / out form when the page is wide enough. */
@@ -510,13 +577,13 @@
   }
 
   function alertCard(a) {
-    return '<button class="row-card" type="button" data-go="' + esc(itemRoute(a.itemId)) + '">' + thumb(a.category) +
+    return '<button class="row-card" type="button" data-go="' + esc(itemRoute(a.itemId)) + '">' + thumb(a.category, a.itemId, a.photo) +
       '<span class="main"><span class="name">' + esc(a.itemName) + '</span><span class="meta">' + esc(qtyText(a.remaining, a.unit) + ' left · ' + daysText(a.daysLeft)) + '</span></span>' +
       '<span class="side">' + badge(a.status) + '</span></button>';
   }
 
   function needCard(n) {
-    return '<button class="row-card" type="button" data-go="' + esc(n.id ? itemRoute(n.id) : 'wishlist') + '">' + thumb(n.category) +
+    return '<button class="row-card" type="button" data-go="' + esc(n.id ? itemRoute(n.id) : 'wishlist') + '">' + thumb(n.category, n.id, n.photo) +
       '<span class="main"><span class="name">' + esc(n.name) + '</span><span class="meta">Needed: ' + esc(n.needed) + '</span></span>' +
       '<span class="side">' + priorityBadge(n.priority) + '</span></button>';
   }
@@ -692,7 +759,12 @@
   function renderItem(res) {
     var it = res.item;
     var id = encodeURIComponent(it.id);
-    var hero = '<section class="item-hero"><div class="top">' + thumb(it.category) +
+    // Items in RQ_Items can have a photo: the picture opens the photo screen.
+    var picture = it.unlisted
+      ? thumb(it.category)
+      : '<button class="thumb-btn" type="button" data-go="photo/' + id + '" aria-label="' + (it.photo ? 'Change the photo' : 'Add a photo') + '">' +
+        thumb(it.category, it.id, it.photo) + '<span class="cam" aria-hidden="true">' + icon('camera') + '</span></button>';
+    var hero = '<section class="item-hero"><div class="top">' + picture +
       '<div class="main" style="flex:1;min-width:0"><h2>' + esc(it.name) + '</h2><div class="meta">' +
       esc([it.category, 'In stock: ' + qtyText(it.stock, it.unit)].filter(Boolean).join(' · ')) + '</div></div>' + badge(it.status) + '</div>' +
       '<div class="figures">' + figure('Usable', it.usable, it.unit) + figure('Expiring soon', it.soonQty, it.unit) + figure('Expired', it.expiredQty, it.unit) + '</div></section>';
@@ -1111,6 +1183,285 @@
     shell({ tab: 'more', nav: 'settings', title: 'Settings', back: 'more', top: true, body: skeleton(3) });
     call('settings').then(function (res) {
       if (isCurrent(token)) renderSettings(res);
+    }).catch(function (err) { if (isCurrent(token)) viewError(err); });
+  };
+
+  /* ================================================================== */
+  /* Item photo: pick, crop to a square, save                            */
+  /* ================================================================== */
+
+  /** Opens a photo file and scales it down to at most 1600px, which keeps cropping fast on phones. */
+  function loadPhotoFile(file) {
+    return new Promise(function (resolve, reject) {
+      if (file.type && !/^image\//.test(file.type)) {
+        reject(new Error('That file is not a photo. Choose a JPG or PNG.'));
+        return;
+      }
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        var r = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+        var c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.naturalWidth * r));
+        c.height = Math.max(1, Math.round(img.naturalHeight * r));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        resolve(c);
+      };
+      img.onerror = function () {
+        URL.revokeObjectURL(url);
+        reject(new Error('This photo could not be opened. Try a JPG or PNG, or take the photo again.'));
+      };
+      img.src = url;
+    });
+  }
+
+  /**
+   * Square cropper. The square on screen is exactly what gets saved.
+   * Drag (mouse, finger or arrow keys) to move; pinch, wheel, slider or +/- to zoom; rotate in 90° steps.
+   * The photo always covers the whole square, so a crop never has empty edges.
+   */
+  function makeCropper(stage, source, slider) {
+    var size = stage.clientWidth;
+    var rot = 0, zoom = 1, base = 1, x = 0, y = 0;
+    var pointers = {}, pinch = 0;
+    source.className = 'crop-img';
+    stage.innerHTML = '';
+    stage.appendChild(source);
+
+    function dims() { return rot % 180 ? { w: source.height, h: source.width } : { w: source.width, h: source.height }; }
+    function fit() { var d = dims(); base = Math.max(size / d.w, size / d.h); }
+    function draw() {
+      var d = dims(), s = base * zoom;
+      var mx = Math.max(0, (d.w * s - size) / 2), my = Math.max(0, (d.h * s - size) / 2);
+      x = Math.max(-mx, Math.min(mx, x));
+      y = Math.max(-my, Math.min(my, y));
+      source.style.transform = 'translate(-50%, -50%) translate(' + x + 'px, ' + y + 'px) rotate(' + rot + 'deg) scale(' + s + ')';
+      slider.value = String(zoom);
+    }
+    function setZoom(z) {
+      var nz = Math.max(1, Math.min(4, z));
+      x *= nz / zoom;
+      y *= nz / zoom;
+      zoom = nz;
+      draw();
+    }
+
+    function down(e) {
+      stage.setPointerCapture(e.pointerId);
+      pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+      pinch = 0;
+      stage.classList.add('dragging');
+    }
+    function move(e) {
+      var p = pointers[e.pointerId];
+      if (!p) return;
+      var ids = Object.keys(pointers);
+      if (ids.length === 1) { x += e.clientX - p.x; y += e.clientY - p.y; }
+      p.x = e.clientX;
+      p.y = e.clientY;
+      if (ids.length === 2) {
+        var a = pointers[ids[0]], b = pointers[ids[1]];
+        var d = Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+        if (pinch) setZoom(zoom * d / pinch);
+        pinch = d;
+      }
+      draw();
+    }
+    function up(e) {
+      delete pointers[e.pointerId];
+      pinch = 0;
+      if (!Object.keys(pointers).length) stage.classList.remove('dragging');
+    }
+    function wheel(e) {
+      e.preventDefault();
+      setZoom(zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
+    }
+    function key(e) {
+      var step = 12, handled = true;
+      if (e.key === 'ArrowLeft') x -= step;
+      else if (e.key === 'ArrowRight') x += step;
+      else if (e.key === 'ArrowUp') y -= step;
+      else if (e.key === 'ArrowDown') y += step;
+      else if (e.key === '+' || e.key === '=') { setZoom(zoom * 1.1); return e.preventDefault(); }
+      else if (e.key === '-') { setZoom(zoom / 1.1); return e.preventDefault(); }
+      else handled = false;
+      if (handled) { e.preventDefault(); draw(); }
+    }
+    function slide() { setZoom(parseFloat(slider.value)); }
+    function resize() {
+      var next = stage.clientWidth;
+      if (!next || next === size) return;
+      x *= next / size;
+      y *= next / size;
+      size = next;
+      fit();
+      draw();
+    }
+
+    stage.addEventListener('pointerdown', down);
+    stage.addEventListener('pointermove', move);
+    stage.addEventListener('pointerup', up);
+    stage.addEventListener('pointercancel', up);
+    stage.addEventListener('wheel', wheel, { passive: false });
+    stage.addEventListener('keydown', key);
+    slider.addEventListener('input', slide);
+    window.addEventListener('resize', resize);
+    fit();
+    draw();
+
+    return {
+      // Turns around the middle of the square, so whatever is centred stays centred.
+      rotate: function () {
+        var nx = -y;
+        y = x;
+        x = nx;
+        rot = (rot + 90) % 360;
+        fit();
+        draw();
+      },
+      /** A 320 x 320 JPEG, shrunk in quality until it fits comfortably in one sheet cell. */
+      toDataUrl: function () {
+        var out = 320;
+        var c = document.createElement('canvas');
+        c.width = c.height = out;
+        var ctx = c.getContext('2d');
+        var k = out / size, s = base * zoom;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, out, out);
+        ctx.imageSmoothingQuality = 'high';
+        ctx.translate(out / 2 + x * k, out / 2 + y * k);
+        ctx.rotate(rot * Math.PI / 180);
+        ctx.scale(s * k, s * k);
+        ctx.drawImage(source, -source.width / 2, -source.height / 2);
+        var q = 0.85, url = c.toDataURL('image/jpeg', q);
+        while (url.length > 40000 && q > 0.45) { q -= 0.1; url = c.toDataURL('image/jpeg', q); }
+        return url;
+      },
+      destroy: function () {
+        window.removeEventListener('resize', resize);
+        slider.removeEventListener('input', slide);
+        stage.innerHTML = '';
+      }
+    };
+  }
+
+  function fileButton(label, iconName, cls, capture) {
+    return '<label class="btn ' + cls + ' file-btn">' + icon(iconName) + '<span>' + esc(label) + '</span>' +
+      '<input class="sr-only" type="file" accept="image/*"' + (capture ? ' capture="environment"' : '') + '></label>';
+  }
+
+  function renderPhoto(it) {
+    var touch = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    var current = it.photo ? cachedPhoto(it.id.toUpperCase(), it.photo) : '';
+    var preview = current
+      ? '<img src="' + esc(current) + '" alt="Current photo of ' + esc(it.name) + '">'
+      : it.photo ? '<span class="hint">Loading photo…</span>' : icon(catIcon(it.category));
+    var choose = (touch ? fileButton('Take photo', 'camera', 'primary', true) : '') +
+      fileButton(touch ? 'Choose from gallery' : 'Choose photo', 'image', touch ? 'secondary' : 'primary', false);
+    var body = '<div class="narrow photo-page">' + itemLine(it) +
+      '<div id="ph-pick">' +
+        '<div class="photo-frame" id="ph-preview">' + preview + '</div>' +
+        '<p class="hint center">' + (it.photo
+          ? 'This photo shows wherever the item is listed. Replace it, or remove it to go back to the category icon.'
+          : 'No photo yet, so lists show the category icon. Take or choose a photo, then crop it to a square.') + '</p>' +
+        '<div class="photo-actions">' + choose +
+          (it.photo ? '<button class="btn secondary danger-text" type="button" id="ph-remove">Remove photo</button>' : '') + '</div>' +
+      '</div>' +
+      '<div id="ph-crop" hidden>' +
+        '<div class="photo-frame photo-stage" id="ph-stage" tabindex="0" role="group" aria-label="Crop area: drag or use the arrow keys to move, plus and minus to zoom"></div>' +
+        '<p class="hint center">Drag to move. Pinch or use the slider to zoom. The square is what gets saved.</p>' +
+        '<div class="zoom-row">' + icon('minus') +
+          '<input type="range" id="ph-zoom" min="1" max="4" step="0.01" value="1" aria-label="Zoom">' + icon('plus') +
+          '<button class="icon-btn" type="button" id="ph-rotate" aria-label="Rotate a quarter turn">' + icon('rotate') + '</button></div>' +
+        '<div class="photo-actions">' +
+          '<button class="btn primary" type="button" id="ph-save">Save photo</button>' +
+          fileButton('Choose another', 'image', 'secondary', false) +
+          '<button class="link center" type="button" id="ph-cancel">Cancel</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    shell({ tab: 'inventory', title: it.photo ? 'Change photo' : 'Add a photo', back: itemRoute(it.id), body: body });
+
+    var view = document.getElementById('view');
+    var pick = document.getElementById('ph-pick');
+    var crop = document.getElementById('ph-crop');
+    var cropper = null;
+
+    if (it.photo && !current) {
+      call('photos', { ids: [it.id] }).then(function (res) {
+        var p = res.photos[it.id.toUpperCase()];
+        var frame = document.getElementById('ph-preview');
+        if (!p || !frame) return;
+        rememberPhoto(it.id, p.version, p.url);
+        frame.innerHTML = '<img src="' + esc(p.url) + '" alt="Current photo of ' + esc(it.name) + '">';
+      }).catch(function () {});
+    }
+
+    view.addEventListener('change', function (e) {
+      var input = e.target;
+      if (input.type !== 'file' || !input.files || !input.files[0]) return;
+      var file = input.files[0];
+      input.value = ''; // so the same photo can be picked again
+      loadPhotoFile(file).then(function (canvas) {
+        if (cropper) cropper.destroy();
+        pick.hidden = true;
+        crop.hidden = false;
+        cropper = makeCropper(document.getElementById('ph-stage'), canvas, document.getElementById('ph-zoom'));
+        document.getElementById('ph-stage').focus();
+      }).catch(function (err) { toast(err.message, 'error'); });
+    });
+
+    document.getElementById('ph-rotate').addEventListener('click', function () { if (cropper) cropper.rotate(); });
+
+    document.getElementById('ph-cancel').addEventListener('click', function () {
+      if (cropper) { cropper.destroy(); cropper = null; }
+      crop.hidden = true;
+      pick.hidden = false;
+    });
+
+    document.getElementById('ph-save').addEventListener('click', function () {
+      if (!cropper) return;
+      var btn = this;
+      var dataUrl = cropper.toDataUrl();
+      setBusy(btn, true);
+      call('setPhoto', { id: it.id, dataUrl: dataUrl }).then(function (res) {
+        rememberPhoto(res.id, res.photo, dataUrl);
+        invalidate();
+        S.itemCache = null;
+        toast(res.message);
+        go(itemRoute(res.id));
+      }).catch(function (err) {
+        setBusy(btn, false);
+        if (!handleAuthError(err)) toast(err.network ? 'Could not reach the server. The photo was not saved.' : err.message, 'error');
+      });
+    });
+
+    var remove = document.getElementById('ph-remove');
+    if (remove) {
+      remove.addEventListener('click', function () {
+        if (!window.confirm('Remove the photo of ' + it.name + '? Lists will show the category icon again.')) return;
+        setBusy(remove, true, 'Removing…');
+        call('removePhoto', { id: it.id }).then(function (res) {
+          rememberPhoto(res.id, '', '');
+          invalidate();
+          S.itemCache = null;
+          toast(res.message);
+          go(itemRoute(res.id));
+        }).catch(function (err) {
+          setBusy(remove, false);
+          if (!handleAuthError(err)) toast(err.network ? 'Could not reach the server.' : err.message, 'error');
+        });
+      });
+    }
+  }
+
+  VIEWS.photo = function (route, token) {
+    shell({ tab: 'inventory', title: 'Item photo', back: itemRoute(route.id), body: skeleton(2) });
+    call('item', { id: route.id }).then(function (res) {
+      if (!isCurrent(token)) return;
+      if (res.item.unlisted) { go(itemRoute(route.id)); return; }
+      renderPhoto(res.item);
     }).catch(function (err) { if (isCurrent(token)) viewError(err); });
   };
 
